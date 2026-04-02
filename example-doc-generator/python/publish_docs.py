@@ -779,7 +779,6 @@ def parse_args() -> argparse.Namespace:
             "Examples:\n"
             "  python python/publish_docs.py\n"
             "  python python/publish_docs.py --dry-run\n"
-            "  python python/publish_docs.py --test --no-preview\n"
             "  python python/publish_docs.py --category messaging --no-preview\n"
             "  python python/publish_docs.py --docs-repo ~/repos/docs-integrator\n"
         ),
