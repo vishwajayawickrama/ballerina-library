@@ -237,12 +237,31 @@ def commit_and_push(
     branch_name: str,
     dry_run: bool,
 ) -> None:
+    staged_path = f"connectors/{project_name}"
     if dry_run:
-        dry(f"git add . && git commit -m 'samples: add {project_name} connector integration sample'")
+        dry(f"git add -- {staged_path}")
+        dry(f"git commit -m 'samples: add {project_name} connector integration sample'")
         dry(f"git push origin {branch_name}")
         return
+    # Abort if the working tree contains unrelated changes that git add . would sweep up.
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=str(samples_repo),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    unrelated = [
+        line for line in status.stdout.splitlines()
+        if line[3:] and not line[3:].startswith(staged_path)
+    ]
+    if unrelated:
+        raise RuntimeError(
+            "Working tree has unrelated changes; aborting to avoid staging them:\n"
+            + "\n".join(unrelated)
+        )
     info("Committing changes...")
-    subprocess.run(["git", "add", "."], cwd=str(samples_repo), check=True)
+    subprocess.run(["git", "add", "--", staged_path], cwd=str(samples_repo), check=True)
     subprocess.run(
         ["git", "commit", "-m", f"samples: add {project_name} connector integration sample"],
         cwd=str(samples_repo),
