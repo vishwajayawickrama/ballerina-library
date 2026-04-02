@@ -87,7 +87,7 @@ Copy `.env.example` to get started. Used by `publish_docs.py`, `publish_sample.p
 | `INTEGRATION_SAMPLES_BASE_BRANCH` | No | `main` | Base branch for samples PRs |
 | `DOCS_INTEGRATOR_FORK` | ✅ | — | Your fork of docs-integrator (org/repo) |
 | `DOCS_INTEGRATOR_UPSTREAM` | No | `wso2/docs-integrator` | GitHub org/repo for docs PRs |
-| `DOCS_INTEGRATOR_BASE_BRANCH` | No | `dev` | Base branch for docs PRs |
+| `DOCS_INTEGRATOR_BASE_BRANCH` | No | `main` | Base branch for docs PRs |
 
 > **Never commit `.env`** — it is git-ignored.
 

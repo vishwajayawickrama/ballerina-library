@@ -266,7 +266,7 @@ MANDATORY STAGE STRUCTURE — you MUST include ALL of the following stage catego
   **Recovery — if the wrong configurable was injected into a field:**
   - Open THAT field's helper panel → Configurables tab → click the CORRECT configurable name
     in the list to replace the current value with the proper variable reference.
-- **MANDATORY screenshot 2**: After binding ALL connection parameters (required AND optional) to Configurable variables (fields show configurable variable names, not literal values), BEFORE clicking Save. Every field — with no exceptions — must be visible with its configurable reference shown. The documentation step for this screenshot MUST list each parameter as a bullet: **[paramName]** — [one-line description of what this parameter controls].
+- **MANDATORY screenshot 2**: After binding ALL connection parameters (required AND optional) to Configurable variables (fields show configurable variable names, not literal values), BEFORE clicking Save. Every field — with no exceptions — must be visible with its configurable reference shown. The documentation step for this screenshot MUST list each parameter as a bullet: **[paramName]** : [one-line description of what this parameter controls].
   - **CRITICAL placement rule**: Embed in the sub-step that describes filling parameters, NOT in a step about opening the form or saving.
   - **Filename**: ${bt}[goal_prefix]_screenshot_02_connection_form.png${bt}.
 - Click Save/Add to persist the connection.
@@ -366,7 +366,7 @@ Step format:
   ### Step N: [What was done — written from the actual workflow action]
   [One sentence describing what the user does in this step. If parameters were configured,
    list each on its own bullet line immediately after:]
-  - **[paramName]** — [one-line description of what this parameter controls]
+  - **[paramName]** : [one-line description of what this parameter controls]
   ![screenshot description](../screenshots/[prefix]_screenshot_NN.png)
 
 **Numbered sub-list rule (applies to ALL sections — MANDATORY):**
@@ -384,8 +384,8 @@ the numbered sub-list, after the last numbered item.
   3. Inside the automation body, click **+**, expand the **kafkaClient** connection node, and select the **Send** operation.
   4. In the Record Configuration panel, set the **topic** to ${bt}"orders"${bt} and the **value** to ${bt}"Hello World".toBytes()${bt}.
   5. Click **Save** to confirm the operation configuration.
-  - **topic** — the Kafka topic to publish the message to
-  - **value** — the message payload as a byte array
+  - **topic** : the Kafka topic to publish the message to
+  - **value** : the message payload as a byte array
   ![...](../screenshots/kafka_screenshot_05_operation_filled.png)
 
   Example — CORRECT: single sentence (only 1 instruction):
@@ -407,8 +407,8 @@ ${bt}${bt}${bt}markdown
 covered and what API resources will be created, (3) the overall flow assembled on the canvas.]
 
 **Operations used:**
-- **[operationName]** — [one-line description of what this operation does]
-- **[operationName]** — [one-line description of what this operation does]
+- **[operationName]** : [one-line description of what this operation does]
+- **[operationName]** : [one-line description of what this operation does]
 [List ALL connector-specific functions/operations configured during the workflow]
 
 ## Architecture
@@ -466,7 +466,7 @@ Replace the examples above with the diagram appropriate for this connector and w
 
 ## Setting up the [ConnectorName] integration
 
-> **New to WSO2 Integrator?** Follow the [Create a New Integration](../develop/create-integrations/create-new-integration.md) guide to set up your integration first, then return here to add the connector.
+> **New to WSO2 Integrator?** Follow the [Create a New Integration](../../../../develop/create-integrations/create-new-integration.md) guide to set up your integration first, then return here to add the connector.
 
 [No numbered steps in this section. Project creation is a common prerequisite covered in the shared guide above. Numbered steps begin in the next section, starting from Step 1.]
 
@@ -490,8 +490,8 @@ Those steps belong in the next section.]
 
 ### Step N: [Description — e.g., "Bind [ConnectorName] connection parameters to configurables"]
 [One sentence describing the action.]
-- **[paramName]** — [one-line description of what this parameter controls]
-- **[paramName]** — [one-line description of what this parameter controls]
+- **[paramName]** : [one-line description of what this parameter controls]
+- **[paramName]** : [one-line description of what this parameter controls]
 [List ALL parameters configured in this step]
 ![description](../screenshots/[prefix]_screenshot_NN.png)
 
@@ -508,20 +508,27 @@ a value for each configurable:
 
 ## Configuring the [ConnectorName] [OperationName] operation
 
-[Generate steps for Stage C — adding the entry point (if needed), selecting the operation,
-and configuring its parameters. Combine selecting the operation AND filling its parameters
-into ONE step. Do NOT split them into separate steps.]
+[Generate steps for Stage C. If an entry point (Automation or Event Listener) was added,
+document it as a SEPARATE step first. Then combine selecting the operation AND filling its
+parameters into ONE step. Do NOT combine the entry point setup with the operation step.]
 
-### Step N: [Description — e.g., "Add automation and configure [OperationName] operation"]
-[This step typically involves multiple sequential UI actions (adding an entry point, expanding the connection node, selecting an operation, filling values, saving). Because it has 3+ distinct actions, use a numbered sub-list:]
-1. [First action — e.g., "On the canvas, click **+ Add Automation** to add an automation entry point."]
-2. [Second action — e.g., "Set the interval to **1 minute** in the trigger panel and click **Save**."]
-3. [Third action — e.g., "Inside the automation body, click **+**, expand the **[connectorClient]** connection node, and select the **[OperationName]** operation."]
-4. [Fourth action — e.g., "In the Record Configuration panel, fill in the required fields (see parameters below)."]
-5. [Fifth action — e.g., "Click **Save** to confirm the operation configuration."]
-- **[paramName]** — [one-line description of what this parameter controls]
-- **[paramName]** — [one-line description of what this parameter controls]
+### Step N: [Description — e.g., "Add an automation entry point"]
+[ONLY include this step if an Automation trigger or Event Listener was added. Use a numbered sub-list for the UI actions:]
+1. [First action — e.g., "In the left sidebar, hover over **Entry Points** and select the **Add Entry Point** button."]
+2. [Second action — e.g., "Select **Automation** in the artifact selection panel."]
+3. [Third action — e.g., "Select **Create** in the dialog to accept the default settings."]
+![description](../screenshots/[prefix]_screenshot_NN.png)
+
+### Step N+1: [Description — e.g., "Expand the connection and select the [OperationName] operation"]
+[Combine selecting the operation AND configuring its parameters into this single step. Use a numbered sub-list:]
+1. [First action — e.g., "Select the **+** (Add Step) button in the automation flow between the Start and Error Handler nodes."]
+2. [Second action — e.g., "Under **Connections** in the node panel, select **[connectorClient]** to expand it and reveal all available operations."]
+![description of operations panel showing all available operations before selection](../screenshots/[prefix]_screenshot_04_operations_panel.png)
+3. [Third action — e.g., "Select **[OperationName]** from the list of operations, then fill in the operation fields:"]
+- **[paramName]** : [one-line description of what this parameter controls]
+- **[paramName]** : [one-line description of what this parameter controls]
 [List ALL parameters configured in this step]
+4. [Final action — e.g., "Select **Save** to add the step to the automation flow."]
 ![description](../screenshots/[prefix]_screenshot_NN.png)
 
 ${bt}${bt}${bt}

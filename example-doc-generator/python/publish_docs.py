@@ -173,7 +173,7 @@ CATEGORY_MAP: dict[str, str] = {
 AVAILABLE_CATEGORIES = sorted(set(CATEGORY_MAP.values()))
 
 DEFAULT_UPSTREAM = os.environ.get("DOCS_INTEGRATOR_UPSTREAM", "wso2/docs-integrator")
-DEFAULT_BASE_BRANCH = os.environ.get("DOCS_INTEGRATOR_BASE_BRANCH", "dev")
+DEFAULT_BASE_BRANCH = os.environ.get("DOCS_INTEGRATOR_BASE_BRANCH", "main")
 PREVIEW_PORT = 3333
 VIEWPORT_WIDTH = 1440
 VIEWPORT_HEIGHT = 900
@@ -347,7 +347,7 @@ def sync_and_branch(
     branch_name: str,
     dry_run: bool,
     upstream_slug: str = DEFAULT_UPSTREAM,
-    base_branch: str = "dev",
+    base_branch: str = "main",
 ) -> None:
     """Fast-forward fork's base branch from upstream, then create the feature branch."""
     remotes = run(["git", "remote"], cwd=docs_repo).split()
