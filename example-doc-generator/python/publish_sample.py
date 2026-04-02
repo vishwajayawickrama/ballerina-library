@@ -303,9 +303,7 @@ Contains Ballerina source files demonstrating connector operations.
 
 ## Security checks
 
-- Followed secure coding standards: yes
 - Ran FindSecurityBugs plugin: N/A (Ballerina project)
-- Confirmed no keys, passwords, tokens, usernames, or secrets committed: yes
 """
 
 
@@ -479,9 +477,12 @@ def main() -> None:
     # ── 0. Write project path file if supplied manually ───────────────────────
     if args.project_path:
         path_file = Path(PROJECT_PATH_FILE)
-        path_file.parent.mkdir(parents=True, exist_ok=True)
-        path_file.write_text(args.project_path.strip(), encoding="utf-8")
-        info(f"Written project path to {PROJECT_PATH_FILE}: {args.project_path.strip()}")
+        if args.dry_run:
+            info(f"[dry-run] Would write project path '{args.project_path.strip()}' to {PROJECT_PATH_FILE}")
+        else:
+            path_file.parent.mkdir(parents=True, exist_ok=True)
+            path_file.write_text(args.project_path.strip(), encoding="utf-8")
+            info(f"Written project path to {PROJECT_PATH_FILE}: {args.project_path.strip()}")
 
     # ── 1. Read project path ──────────────────────────────────────────────────
     project = read_project_path()
