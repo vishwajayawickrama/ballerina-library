@@ -904,13 +904,16 @@ def main() -> None:
     # ── 10. Preview screenshots (not committed to docs repo) ──────────────────
     preview_urls: list[str] = []
     if not args.no_preview:
-        preview_files = take_preview_screenshots(
-            docs_repo, connector_slug, category, artifacts_dir, args.dry_run
-        )
-        if preview_files and not args.dry_run:
-            preview_urls = upload_preview_as_release(
-                preview_files, connector_name, connector_slug, branch_name, fork
+        try:
+            preview_files = take_preview_screenshots(
+                docs_repo, connector_slug, category, artifacts_dir, args.dry_run
             )
+            if preview_files and not args.dry_run:
+                preview_urls = upload_preview_as_release(
+                    preview_files, connector_name, connector_slug, branch_name, fork
+                )
+        except Exception as exc:
+            warn(f"Preview step failed (branch already pushed — continuing to PR creation): {exc}")
 
     # ── 11. Create PR ─────────────────────────────────────────────────────────
     pr_body = build_pr_body(
