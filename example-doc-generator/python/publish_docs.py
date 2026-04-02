@@ -723,7 +723,6 @@ Added {connector_name} connector example guide showing how to configure the \
 
 - Followed secure coding standards: N/A (documentation only)
 - Ran FindSecurityBugs plugin: N/A (documentation only)
-- Confirmed no keys, passwords, or secrets committed: yes\
 {preview_section}
 """
 
