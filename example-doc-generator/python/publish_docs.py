@@ -47,6 +47,7 @@ Prerequisites:
 
 import argparse
 import datetime
+from collections.abc import Sequence
 import os
 import re
 import signal
@@ -648,14 +649,17 @@ def commit_and_push(
     connector_name: str,
     branch_name: str,
     dry_run: bool,
+    generated_paths: Sequence[Path],
 ) -> None:
-    """Stage all changes, commit, and push the feature branch to origin."""
+    """Stage only the generated files, commit, and push the feature branch to origin."""
+    paths_str = " ".join(map(str, generated_paths))
     if dry_run:
-        dry(f"git add . && git commit -m 'docs: add {connector_name} connector example guide'")
+        dry(f"git add -- {paths_str}")
+        dry(f"git commit -m 'docs: add {connector_name} connector example guide'")
         dry(f"git push origin {branch_name}")
         return
     info("Committing changes...")
-    subprocess.run(["git", "add", "."], cwd=str(docs_repo), check=True)
+    subprocess.run(["git", "add", "--", *map(str, generated_paths)], cwd=str(docs_repo), check=True)
     subprocess.run(
         ["git", "commit", "-m", f"docs: add {connector_name} connector example guide"],
         cwd=str(docs_repo),
@@ -882,7 +886,12 @@ def main() -> None:
     )
 
     # ── 9. Commit + push ──────────────────────────────────────────────────────
-    commit_and_push(docs_repo, connector_name, branch_name, args.dry_run)
+    generated_paths: list[Path] = [
+        docs_repo / "en" / "docs" / "connectors" / "catalog" / category / connector_slug / "example.md",
+        docs_repo / "en" / "static" / "img" / "connectors" / "catalog" / category / connector_slug,
+        docs_repo / "en" / "sidebars.ts",
+    ]
+    commit_and_push(docs_repo, connector_name, branch_name, args.dry_run, generated_paths)
 
     if args.no_pr:
         print()
