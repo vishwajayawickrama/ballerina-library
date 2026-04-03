@@ -417,7 +417,7 @@ Each screenshot must be embedded in the step whose **action directly produced wh
 - MUST be embedded in the step that describes **expanding the connection node** or opening the step-addition panel to reveal available operations — before selecting any operation.
 - MUST NOT appear in a step that describes selecting or configuring an operation.
 - **If _04_operations_panel is absent from the document but _05_operation_filled is present**: insert the missing reference immediately before the first occurrence of _05_operation_filled. Use this format (replace {prefix} with the actual filename prefix and {ConnectorName} with the real connector name):
-  `![{ConnectorName} connection node expanded showing all available operations before selection](../screenshots/{prefix}_screenshot_04_operations_panel.png)`
+  ![{ConnectorName} connection node expanded showing all available operations before selection](../screenshots/{prefix}_screenshot_04_operations_panel.png)
 
 **Screenshot 05 — Operation values filled (_05_operation_filled):**
 - MUST be embedded in the step that describes **selecting the operation and filling ALL its input fields / Record Configuration** values.
@@ -426,7 +426,7 @@ Each screenshot must be embedded in the step whose **action directly produced wh
 **Screenshot 06 — Completed canvas flow (_06_completed_flow, optional):**
 - If present, embed after the operation save step, showing the completed flow on the canvas.
 - **If _06_completed_flow is absent but a file with that name exists**: the agent captured it — add it as the final image in the last step of the ## Configuring the operation section, after _05_operation_filled. Use this format:
-  `![Completed {ConnectorName} automation flow](../screenshots/{prefix}_screenshot_06_completed_flow.png)`
+  ![Completed {ConnectorName} automation flow](../screenshots/{prefix}_screenshot_06_completed_flow.png)
 
 **Save-then-reopen prohibition:**
 - If the document contains a step that saves the connection with defaults, immediately followed by a step that re-opens the same connection to fill parameters, this is a workflow error.
