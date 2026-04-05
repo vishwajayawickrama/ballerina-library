@@ -125,9 +125,12 @@ public function main(string connectorName) returns error? {
     // ── Phase 3: Prompt generation ──────────────────────────────────────────
 
     // Derive connector slug from connector name — no LLM call needed
+    // Preserve dots so org-qualified names like "aws.sns" stay as "aws.sns" in paths/branches.
     string connectorSlug = connectorName.trim().toLowerAscii();
     connectorSlug = re `\s+`.replaceAll(connectorSlug, "-");
-    connectorSlug = re `[^a-z0-9\-]`.replaceAll(connectorSlug, "");
+    connectorSlug = re `[^a-z0-9\-\.]`.replaceAll(connectorSlug, "");
+    // Image filenames must use underscores (dots are not safe in screenshot prefixes).
+    string imgSlug = re `\.`.replaceAll(connectorSlug, "_");
     string goalSlug = connectorSlug + "-connector-example";
     utils:log("[INFO] Connector slug: " + goalSlug);
 
@@ -148,7 +151,7 @@ public function main(string connectorName) returns error? {
     utils:log("[STEP 7] Building system and user prompts...");
     string|error cwdResult = file:getCurrentDir();
     string projectRoot = cwdResult is string ? cwdResult : os:getEnv("PWD");
-    string systemPrompt = prompts:buildSystemPrompt(projectRoot, connectorName);
+    string systemPrompt = prompts:buildSystemPrompt(projectRoot, connectorName, imgSlug);
     string userMessage = prompts:buildUserMessage(connectorName, codeServerUrl, projectRoot);
 
     // Step 8: Call Anthropic API to generate the execution prompt

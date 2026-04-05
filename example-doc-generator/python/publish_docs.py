@@ -250,7 +250,7 @@ def extract_connector_info(content: str) -> tuple[str, str, str]:
     raw = CONNECTOR_NAME_FILE.read_text(encoding="utf-8").strip()
     if not raw:
         fail("connector-name.txt is empty. Run the Ballerina pipeline first.")
-    slug = re.sub(r"[^a-z0-9]+", "-", raw.lower()).strip("-")
+    slug = re.sub(r"[^a-z0-9.]+", "-", raw.lower()).strip("-.")
     display_name = raw.replace("-", " ").title()
     info(f"Connector slug from file: {slug}")
 
@@ -572,7 +572,7 @@ def take_preview_screenshots(
             for i, scroll_y in enumerate(positions, start=1):
                 page.evaluate(f"window.scrollTo(0, {scroll_y})")
                 page.wait_for_timeout(400)  # let lazy-loaded images render
-                out = preview_dir / f"{connector_slug}_preview_{i:02d}.png"
+                out = preview_dir / f"{connector_slug.replace('.', '_')}_preview_{i:02d}.png"
                 page.screenshot(path=str(out))
                 screenshot_files.append(out)
                 info(f"  [{i:02d}] scroll={scroll_y}px → {out.name}")
@@ -608,7 +608,7 @@ def upload_preview_as_release(
         return []
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    tag = f"docs-preview-{connector_slug}-{timestamp}"
+    tag = f"docs-preview-{connector_slug.replace('.', '_')}-{timestamp}"
     title = f"Doc preview: {connector_name} connector example"
     notes = (
         f"Preview screenshots of the rendered docs page for branch `{branch_name}`.\n\n"
