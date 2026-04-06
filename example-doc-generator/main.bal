@@ -33,15 +33,19 @@ import wso2/example_doc_generator.utils;
 # Phase 4  (Steps 11–12): Agent execution   — run agent, enforce doc structure.
 # Phase 5  (Steps 13–16): Post-processing   — inject Devant button, append examples link, crop screenshots, write run log.
 #
-# + connectorName - exact Ballerina Central package name, e.g. "mysql", "kafka"
-# + return        - an error if any step fails
-public function main(string connectorName) returns error? {
+# + connectorName          - exact Ballerina Central package name, e.g. "mysql", "kafka"
+# + additionalInstructions - optional extra instructions for the agent (e.g. "Use BearerTokenConfig for auth")
+# + return                 - an error if any step fails
+public function main(string connectorName, string additionalInstructions = "") returns error? {
     utils:log("=== WSO2 Integrator Documentation Pipeline ===");
     utils:log("");
 
     time:Utc startTime = time:utcNow();
     utils:log("[INFO] Start time: " + time:utcToString(startTime));
     utils:log("[INFO] Connector: " + connectorName);
+    if additionalInstructions != "" {
+        utils:log("[INFO] Additional instructions: " + additionalInstructions);
+    }
     utils:log("");
 
     // Track LLM usage across all direct API calls (agent cost is tracked separately)
@@ -152,7 +156,7 @@ public function main(string connectorName) returns error? {
     string|error cwdResult = file:getCurrentDir();
     string projectRoot = cwdResult is string ? cwdResult : os:getEnv("PWD");
     string systemPrompt = prompts:buildSystemPrompt(projectRoot, connectorName, imgSlug);
-    string userMessage = prompts:buildUserMessage(connectorName, codeServerUrl, projectRoot);
+    string userMessage = prompts:buildUserMessage(connectorName, codeServerUrl, projectRoot, additionalInstructions);
 
     // Step 8: Call Anthropic API to generate the execution prompt
     utils:log("[STEP 8] Calling Anthropic API to generate execution prompt...");
@@ -292,8 +296,9 @@ public function main(string connectorName) returns error? {
     // Step 16: Write run log to artifacts/run-log/
     utils:log("[STEP 16] Writing run log...");
     utils:writeRunLog({
-        connectorName:       connectorName,
-        connectorSlug:       goalSlug,
+        connectorName:            connectorName,
+        connectorSlug:            goalSlug,
+        additionalInstructions:   additionalInstructions,
         startTime:           startTime,
         endTime:             endTime,
         durationSecs:        durationSecs,

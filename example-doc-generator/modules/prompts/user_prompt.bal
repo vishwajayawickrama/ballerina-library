@@ -18,13 +18,19 @@
 # connector name, code-server URL, and absolute artifact paths. All rules, template
 # structure, and formatting instructions live in system_prompt.bal.
 #
-# + connectorName - Exact Ballerina Central package name (e.g. "mysql", "kafka")
-# + codeServerUrl - The URL where code-server is running
-# + projectRoot   - Absolute path to the project root directory
+# + connectorName          - Exact Ballerina Central package name (e.g. "mysql", "kafka")
+# + codeServerUrl          - The URL where code-server is running
+# + projectRoot            - Absolute path to the project root directory
+# + additionalInstructions - Optional extra instructions for the agent (empty string if none)
 # + return - the user message string
-public function buildUserMessage(string connectorName, string codeServerUrl, string projectRoot) returns string {
+public function buildUserMessage(string connectorName, string codeServerUrl, string projectRoot, string additionalInstructions = "") returns string {
     string screenshotsDir = projectRoot + "/artifacts/screenshots";
     string workflowDocsDir = projectRoot + "/artifacts/workflow-docs";
+    string additionalInstructionsSection = additionalInstructions != "" ? string `
+
+ADDITIONAL INSTRUCTIONS (these take priority and must be followed exactly):
+${additionalInstructions}
+` : "";
     return string `Generate a highly detailed execution prompt for the following goal.
 
 THE MAIN GOAL (this must be the central focus of the ENTIRE execution prompt):
@@ -33,7 +39,7 @@ Create a WSO2 Integrator workflow using the ${connectorName} connector (ballerin
 2. Configure the connection by binding each required parameter to a Configurable variable.
 3. Add an entry point (Automation trigger or Event Listener as appropriate) and call the primary remote operation for this connector type.
 4. Document every step with screenshots at the mandatory milestones.
-
+${additionalInstructionsSection}
 Make sure the goal above is clearly reflected in:
 - The prompt TITLE (name the connector explicitly)
 - The OVERVIEW section (first sentence must state the connector and operation)
