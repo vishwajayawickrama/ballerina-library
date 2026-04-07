@@ -23,7 +23,8 @@ help:
 	@echo "    make setup-bal        Build the Ballerina project"
 	@echo ""
 	@echo "  Run"
-	@echo "    make run CONNECTOR=mysql  Run the full pipeline for a connector"
+	@echo "    make run CONNECTOR=mysql                                    Run the full pipeline for a connector"
+	@echo "    make run CONNECTOR=mysql ADDITIONAL_INSTRUCTIONS='...'  Run with per-connector guidance (use single quotes for multi-word values)"
 	@echo "    make start-agent      Start the Python agent server in the foreground"
 	@echo "    make stop-agent       Send shutdown request to the agent server"
 	@echo ""
@@ -122,11 +123,13 @@ setup-bal:
 # ── Run ──────────────────────────────────────────────────────────────────────
 
 AGENT_SERVER_PORT ?= 8765
+ADDITIONAL_INSTRUCTIONS ?=
+export ADDITIONAL_INSTRUCTIONS
 
 run:
 	@[ "$(CONNECTOR)" ] || { echo "Usage: make run CONNECTOR=mysql"; exit 1; }
-	@echo "→ Running full pipeline for connector: $(CONNECTOR)"
-	bal run -- $(CONNECTOR)
+	@echo "→ Running full pipeline for connector: $(CONNECTOR)$(if $(ADDITIONAL_INSTRUCTIONS), (with additional instructions),)"
+	bal run -- $(CONNECTOR) $(if $(ADDITIONAL_INSTRUCTIONS),"$$ADDITIONAL_INSTRUCTIONS",)
 
 crop-screenshots: python/.venv/.installed
 	python/.venv/bin/python python/crop_screenshots.py
