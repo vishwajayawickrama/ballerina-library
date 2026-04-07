@@ -33,7 +33,7 @@ help:
 	@echo "    make publish-docs-dry         Dry run — print planned actions, no changes"
 	@echo "    make publish-docs-no-preview  Publish docs without Playwright preview screenshots"
 	@echo "    make publish-docs-no-pr       Push branch + commit only, skip PR creation"
-	@echo "    PUBLISH_ARGS='...'            Pass extra flags, e.g. PUBLISH_ARGS='--category messaging'"
+	@echo "    PUBLISH_ARGS='...'            Pass extra flags, e.g. PUBLISH_ARGS='--category security-identity'"
 	@echo "    DOCS_REPO=PATH                Override docs-integrator path"
 	@echo "    DOCS_UPSTREAM=OWNER/REPO      Override docs PR target repo (.env: DOCS_INTEGRATOR_UPSTREAM)"
 	@echo "    DOCS_BASE_BRANCH=BRANCH       Override docs PR base branch (.env: DOCS_INTEGRATOR_BASE_BRANCH)"

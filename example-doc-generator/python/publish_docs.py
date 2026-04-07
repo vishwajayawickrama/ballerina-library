@@ -160,6 +160,10 @@ CATEGORY_MAP: dict[str, str] = {
     "sap": "erp-business",
     "netsuite": "erp-business",
     "workday": "hrms",
+    # Security / Identity
+    "aws.secretmanager": "security-identity", "secretmanager": "security-identity",
+    "aws.secretsmanager": "security-identity", "secretsmanager": "security-identity",
+    "scim": "security-identity", "scim2": "security-identity",
     # HRMS
     "hrms": "hrms",
     # Connectivity
