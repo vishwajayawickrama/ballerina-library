@@ -324,6 +324,8 @@ If the goal uses an event listener entry point, or the connector can be called d
    - For any other connector: choose the most fundamental write/send operation
 4. Click on the selected operation to open its configuration panel.
 5. Inspect all available input fields and the **Record Configuration** panel.
+   - **Record Configuration — auth fields**: If the Record Configuration panel contains an auth-type union field (e.g., a dropdown showing ${bt}OAuth2ClientCredentialsGrantConfig${bt}, ${bt}CredentialsConfig${bt}, ${bt}BearerTokenConfig${bt}, etc.), **do NOT change the selected auth type**. Leave the default selection as-is. Only fill in the required fields that are already visible under the pre-selected auth type (e.g., ${bt}clientId${bt}, ${bt}clientSecret${bt}).
+   - **Record Configuration — optional fields**: Do NOT enable or check any checkbox next to fields labelled "(Optional)". Only interact with fields that are already checked/required.
 6. Populate the Record Configuration or input fields with a valid, functional data template:
    - For byte-based systems (Kafka, MQTT): use ${bt}.toBytes()${bt} — e.g., ${bt}"Hello World".toBytes()${bt} for the message payload
    - For record-based connectors (Database INSERT): provide a typed record literal — e.g., ${bt}{ id: 1, name: "John Doe", email: "john@example.com" }${bt}
@@ -337,7 +339,7 @@ If the goal uses an event listener entry point, or the connector can be called d
       - **"Record Configuration" modal** (title "Record Configuration", has ${bt}×${bt} close button top-right and ${bt}←${bt} back button top-left): does NOT close on Escape — click its ${bt}×${bt} or ${bt}←${bt} button, then call ${bt}browser_snapshot${bt} to confirm it is gone.
       - **Helper/Configurable side panel**: press ${bt}Escape${bt} or click its close button to dismiss it.
       - After closing all overlays, call ${bt}browser_snapshot${bt} and verify: the ONLY thing visible is the operation configuration form with no overlapping panels or modals.
-   2. **Scroll the operation form to the top**: Call ${bt}browser_evaluate${bt} to set the scrollable form container's ${bt}scrollTop${bt} to 0. Inspect the DOM via ${bt}browser_snapshot${bt} to identify the correct scrollable element.
+   2. **Scroll both panels to the top**: Call ${bt}browser_evaluate${bt} twice — once for the left-side operation form container and once for the right-hand side panel (the live preview / code view panel). Set each scrollable element's ${bt}scrollTop${bt} to 0. Inspect the DOM via ${bt}browser_snapshot${bt} to identify both scrollable elements. The right-hand panel is typically a sibling container to the left form panel inside the same split-panel layout.
    3. **Verify**: Call ${bt}browser_snapshot${bt} and confirm (a) no overlay is present and (b) the topmost fields of the operation form are visible.
    4. **Only then** call ${bt}browser_take_screenshot${bt}. Every configured field must be visible.
    - **CRITICAL placement rule**: Embed in the step that describes selecting the operation AND filling its values. Do NOT embed it in a step that describes only expanding the operations panel.
