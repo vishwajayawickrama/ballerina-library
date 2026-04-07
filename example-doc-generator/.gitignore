@@ -70,3 +70,5 @@ Config.toml
 config.toml
 
 CLAUDE.md
+
+.claude/
