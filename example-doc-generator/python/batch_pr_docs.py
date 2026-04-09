@@ -235,10 +235,13 @@ def main() -> None:
     )
 
     # ── 5. Create PR ───────────────────────────────────────────────────────────
-    pr_title = (
-        f"docs: add connector example guides ({', '.join(connector_names)})"
-        if connector_names else "docs: add batch connector example guides"
-    )
+    count = len(connector_names)
+    if count == 0:
+        pr_title = "docs: add batch connector example guides"
+    elif count == 1:
+        pr_title = f"docs: add {connector_names[0]} connector example guide"
+    else:
+        pr_title = f"docs: add {count} connector example guides"
 
     fork_owner = fork.split("/")[0]
     head = f"{fork_owner}:{args.branch}"

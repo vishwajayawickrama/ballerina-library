@@ -243,6 +243,19 @@ MANDATORY STAGE STRUCTURE — you MUST include ALL of the following stage catego
   Every visible non-boolean field in the connection form must have a configurable bound to it
   before saving.
   Before saving, scroll through the entire form from top to bottom to confirm no field was missed.
+
+  **Connection auth field — do NOT change the default auth type:** If the connection form (or its
+  Record Configuration sub-panel) contains an ${bt}auth${bt} union field showing options like
+  ${bt}BearerTokenConfig${bt}, ${bt}OAuth2RefreshTokenGrantConfig${bt},
+  ${bt}OAuth2ClientCredentialsGrantConfig${bt}, ${bt}CredentialsConfig${bt}, etc., **leave the
+  pre-selected auth type exactly as the UI defaults it**. Do NOT open the auth dropdown and switch
+  it to a different variant, even if a different variant would expose more bindable fields. Only
+  bind configurables to the auth fields already visible under the default auth selection (e.g.
+  if the default is ${bt}BearerTokenConfig${bt} with a single ${bt}token${bt} field, bind exactly
+  one configurable to ${bt}token${bt}). The "bind every non-boolean field" rule above applies
+  ONLY to fields visible under the default auth choice — it does NOT authorize switching the
+  auth type to surface additional fields. This rule applies to BOTH the connection form itself
+  AND any Record Configuration sub-panel reached from the connection form.
   The workflow MUST be done field-by-field — do NOT try to create configurables for multiple
   fields from the same helper panel session. Follow these sub-steps for EACH field individually:
 
@@ -260,6 +273,68 @@ MANDATORY STAGE STRUCTURE — you MUST include ALL of the following stage catego
      name again in the list — it is already bound. Close the helper panel immediately.
   7. Move to the next field and repeat from step 1.
 
+  **Record-typed connection fields — the Record Configuration modal (CRITICAL):**
+  Some connection fields are themselves records — e.g. ${bt}auth${bt} on AWS connectors
+  (${bt}{accessKeyId, secretAccessKey}${bt}), ${bt}apiKeysConfig${bt} on Trello
+  (${bt}{'key, token}${bt}), ${bt}auth${bt} on OAuth2 connectors
+  (${bt}{refreshUrl, refreshToken, clientId, clientSecret}${bt}), and so on. Clicking such a
+  field opens a modal titled **"Record Configuration"** containing the nested sub-fields and a
+  code-preview textbox on the right side. The 7-step workflow above does NOT directly apply
+  inside this modal because the nested sub-fields do NOT have an "Open Helper Panel" button
+  next to each one. You MUST follow the special procedure below — failing to do so produces
+  the most common and most damaging failure mode in the entire pipeline.
+
+  **DO NOT** (this is the failure mode that breaks ${bt}config.bal${bt}):
+  - Do NOT click into the modal's right-side code-preview textbox, press
+    ${bt}Control+a${bt}/${bt}Meta+a${bt}, and ${bt}browser_type${bt} a record literal like
+    ${bt}{accessKeyId: sqsAccessKey, secretAccessKey: sqsSecretKey}${bt}. The identifiers you
+    type are NOT created as configurables — they become dangling identifier references.
+    The modal will show "undefined symbol" red squiggles. The connection may still appear to
+    save, but ${bt}config.bal${bt} will be missing those configurables and the integration will
+    fail at runtime. This is the SAME failure mode as the "NEVER type a configurable name
+    directly" rule below — it just looks different inside the modal context.
+
+  **CORRECT pattern — bind nested sub-fields one at a time via the right-side preview:**
+  1. After the Record Configuration modal opens, locate the **right-side code-preview textbox**.
+     It shows the record literal one line per sub-field, e.g.:
+     ${bt}refreshUrl: ""${bt}, ${bt}refreshToken: ""${bt}, ${bt}clientId: ""${bt},
+     ${bt}clientSecret: ""${bt}.
+  2. **Click on the value position** of the FIRST sub-field's line — i.e. click between the
+     quotes of ${bt}refreshUrl: ""${bt} so the cursor lands inside the empty string for that
+     specific sub-field. This focuses that sub-field as the "active" target for auto-injection.
+  3. A helper panel appears **below the right-side preview** (NOT next to the sub-field — the
+     placement is different from the top-level workflow). It exposes the same
+     ${bt}Inputs / Variables / Configurables / Functions${bt} tabs.
+  4. Click the **Configurables** tab → **+ New Configurable** → fill ${bt}Variable Name${bt}
+     (camelCase, descriptive, e.g. ${bt}sqsAccessKey${bt}, ${bt}trelloApiKey${bt},
+     ${bt}calendarRefreshUrl${bt}) and ${bt}Variable Type${bt} (${bt}string${bt} for credentials,
+     URLs, IDs, tokens) → leave ${bt}Default Value${bt} blank for secrets → click **Save**.
+  5. After Save, the configurable is REALLY created (it WILL appear in ${bt}config.bal${bt})
+     AND auto-injected into the active sub-field's value position. Call ${bt}browser_snapshot${bt}
+     and verify the preview line now reads e.g. ${bt}refreshUrl: refreshUrl,${bt} instead of
+     ${bt}refreshUrl: "",${bt}.
+  6. Click the value position of the **NEXT** sub-field's line and repeat from step 4. Work
+     ONE sub-field at a time — do NOT try to create multiple configurables in a single helper
+     session, do NOT type record literals as a shortcut.
+  7. After ALL nested sub-fields are bound, the right-side preview must contain ONLY identifier
+     references — no empty strings ${bt}""${bt}, no quoted literals. Only THEN close the
+     Record Configuration modal via its ${bt}×${bt} (top-right) or ${bt}←${bt} (top-left) button.
+
+  **Recovery — if you already typed a record literal and the modal shows "undefined symbol":**
+  You CANNOT save the connection in this state — those configurables don't exist in
+  ${bt}config.bal${bt}. Close the Record Configuration modal, click the field on the connection
+  form to re-open it, and apply the correct pattern above. Each identifier name you previously
+  typed must be created as a real configurable through the helper-panel "+ New Configurable"
+  flow. Do NOT attempt to "fix" dangling references by saving the connection and editing
+  ${bt}config.bal${bt} afterward.
+
+  **Pre-save audit for record-typed fields (MANDATORY):** Before closing the Record
+  Configuration modal and clicking Save Connection, every record-typed field's preview must
+  show ONLY identifier references that match configurables you actually created via the
+  helper-panel flow in this session. If any sub-field still shows ${bt}""${bt} or a quoted
+  literal, or shows an identifier name for which you did NOT click "+ New Configurable" → Save,
+  return to the correct pattern above and bind it properly.
+
   **Pre-save field audit (MANDATORY):** Before clicking Save/Add, scroll the entire connection
   form from top to bottom and call ${bt}browser_snapshot${bt}. Verify that EVERY field — including
   any that appeared collapsed, optional, or greyed-out — now shows a configurable variable
@@ -271,6 +346,9 @@ MANDATORY STAGE STRUCTURE — you MUST include ALL of the following stage catego
   because it passes the literal text as the credential instead of the configured value.
   The ONLY correct way to bind a configurable is via the auto-inject after clicking Save in the
   New Configurable dialog, or by clicking its name in the Configurables panel list.
+  This applies equally inside the Record Configuration modal — see "Record-typed connection
+  fields — the Record Configuration modal" above for the correct pattern when the field is a
+  record sub-field reached via that modal.
 
   **Recovery — if the wrong configurable was injected into a field:**
   - Open THAT field's helper panel → Configurables tab → click the CORRECT configurable name
@@ -354,6 +432,17 @@ For EACH goal-specific stage:
 - Name specific UI element labels/buttons to click or fields to fill
 - Describe what the UI should look like after each step to confirm success
 - Include "If X is not visible, try Y" fallback instructions
+- **Auth-field neutrality (CRITICAL):** When writing the OBJECTIVES section and the CATEGORY B
+  connection-configuration sub-steps, do NOT enumerate auth-specific field names such as
+  ${bt}clientId${bt}, ${bt}clientSecret${bt}, ${bt}refreshToken${bt}, ${bt}refreshUrl${bt},
+  ${bt}accessToken${bt}, ${bt}token${bt}, etc., even if you "know" the connector uses OAuth2 /
+  bearer / basic auth. Refer generically to "the parameters visible in the default connection
+  form for this connector" or "each non-boolean field shown by default in the Configure
+  [ConnectorName] form". The runtime agent will discover the actual fields from the UI and bind
+  configurables to whatever is visible under the default auth selection. Enumerating
+  auth-specific field names in the generated prompt creates pressure on the runtime agent to
+  switch the connection's auth dropdown to a variant that exposes those fields, which violates
+  the "do NOT change the default auth type" rule in CATEGORY B.
 
 These stages must make the user's goal ACTIONABLE and SPECIFIC — not generic.]
 
@@ -413,7 +502,7 @@ the numbered sub-list, after the last numbered item.
   5. Click **Save** to confirm the operation configuration.
   - **topic** : the Kafka topic to publish the message to
   - **value** : the message payload as a byte array
-  ![...](../screenshots/kafka_screenshot_05_operation_filled.png)
+   ![...](../screenshots/kafka_producer_screenshots_05_operation_filled.png)
 
   Example — CORRECT: single sentence (only 1 instruction):
   ### Step N: Search for the Redis connector in the palette

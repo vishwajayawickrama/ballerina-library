@@ -235,10 +235,13 @@ def main() -> None:
     pr_body = build_batch_pr_body(sample_names)
 
     # ── 5. Create PR ───────────────────────────────────────────────────────────
-    pr_title = (
-        f"samples: add connector integration samples ({', '.join(sample_names)})"
-        if sample_names else "samples: add batch connector integration samples"
-    )
+    count = len(sample_names)
+    if count == 0:
+        pr_title = "samples: add batch connector integration samples"
+    elif count == 1:
+        pr_title = f"samples: add {sample_names[0]} connector integration sample"
+    else:
+        pr_title = f"samples: add {count} connector integration samples"
 
     fork_owner = fork.split("/")[0]
     head = f"{fork_owner}:{args.branch}"

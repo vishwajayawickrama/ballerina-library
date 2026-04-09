@@ -172,6 +172,17 @@ CATEGORY_MAP: dict[str, str] = {
     "sftp": "connectivity",
     "smtp": "connectivity",
     "imap": "connectivity",
+    # Marketing & Social
+    "hubspot.marketing.campaigns": "marketing-social",
+    "hubspot.marketing.emails": "marketing-social",
+    "hubspot.marketing.events": "marketing-social",
+    "hubspot.marketing.forms": "marketing-social",
+    "hubspot.marketing.subscriptions": "marketing-social",
+    "hubspot.marketing.transactional": "marketing-social",
+    "mailchimp.marketing": "marketing-social",
+    "mailchimp.transactional": "marketing-social",
+    "salesforce.marketingcloud": "marketing-social",
+    "twitter": "marketing-social",
 }
 
 AVAILABLE_CATEGORIES = sorted(set(CATEGORY_MAP.values()))
