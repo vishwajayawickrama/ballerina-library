@@ -70,17 +70,37 @@ from pr_preview import checkout_branch
 
 def read_connectors_from_branch(docs_repo: Path, base_branch: str) -> list[str]:
     """
-    Parse the git log of the current branch since it diverged from origin/{base_branch}
-    and return the list of connector names found in commit messages of the form
+    Parse the git log of the current branch since the most recent merge commit
+    (i.e. since the last PR from this branch was merged back in) and return the
+    list of connector names found in commit messages of the form
     "docs: add {ConnectorName} connector example guide".
+
+    If no merge commit is found on HEAD, falls back to commits since
+    origin/{base_branch}.
     """
+    last_merge = ""
+    try:
+        last_merge = run(
+            ["git", "log", "--merges", "-n", "1", "--pretty=format:%H", "HEAD"],
+            cwd=docs_repo,
+        ).strip()
+    except subprocess.CalledProcessError:
+        pass
+
+    if last_merge:
+        info(f"Reading connectors committed since last merge commit {last_merge[:8]}")
+        log_range = f"{last_merge}..HEAD"
+    else:
+        info(f"No merge commit found on branch; using origin/{base_branch}..HEAD")
+        log_range = f"origin/{base_branch}..HEAD"
+
     try:
         log = run(
-            ["git", "log", f"origin/{base_branch}..HEAD", "--pretty=format:%s"],
+            ["git", "log", log_range, "--pretty=format:%s"],
             cwd=docs_repo,
         )
     except subprocess.CalledProcessError:
-        warn(f"Could not read git log relative to origin/{base_branch}. Trying HEAD~20...")
+        warn(f"Could not read git log for {log_range}. Trying HEAD~20...")
         log = run(["git", "log", "HEAD~20..HEAD", "--pretty=format:%s"], cwd=docs_repo)
 
     connectors: list[str] = []
@@ -235,13 +255,7 @@ def main() -> None:
     )
 
     # ── 5. Create PR ───────────────────────────────────────────────────────────
-    count = len(connector_names)
-    if count == 0:
-        pr_title = "docs: add batch connector example guides"
-    elif count == 1:
-        pr_title = f"docs: add {connector_names[0]} connector example guide"
-    else:
-        pr_title = f"docs: add {count} connector example guides"
+    pr_title = f"docs: adding docs from {args.branch}"
 
     fork_owner = fork.split("/")[0]
     head = f"{fork_owner}:{args.branch}"

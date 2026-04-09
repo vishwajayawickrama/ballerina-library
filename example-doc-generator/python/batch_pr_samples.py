@@ -53,7 +53,6 @@ from publish_sample import (
     DEFAULT_BASE_BRANCH,
     DEFAULT_SAMPLES_REPO,
     DEFAULT_UPSTREAM_REPO,
-    create_pr,
     dry,
     fail,
     info,
@@ -79,17 +78,37 @@ def checkout_branch(samples_repo: Path, branch: str, dry_run: bool) -> None:
 
 def read_samples_from_branch(samples_repo: Path, base_branch: str) -> list[str]:
     """
-    Parse the git log of the current branch since it diverged from origin/{base_branch}
-    and return the list of project names found in commit messages of the form
+    Parse the git log of the current branch since the most recent merge commit
+    (i.e. since the last PR from this branch was merged back in) and return the
+    list of project names found in commit messages of the form
     "samples: add {project_name} connector integration sample".
+
+    If no merge commit is found on HEAD, falls back to commits since
+    origin/{base_branch}.
     """
+    last_merge = ""
+    try:
+        last_merge = run(
+            ["git", "log", "--merges", "-n", "1", "--pretty=format:%H", "HEAD"],
+            cwd=samples_repo,
+        ).strip()
+    except subprocess.CalledProcessError:
+        pass
+
+    if last_merge:
+        info(f"Reading samples committed since last merge commit {last_merge[:8]}")
+        log_range = f"{last_merge}..HEAD"
+    else:
+        info(f"No merge commit found on branch; using origin/{base_branch}..HEAD")
+        log_range = f"origin/{base_branch}..HEAD"
+
     try:
         log = run(
-            ["git", "log", f"origin/{base_branch}..HEAD", "--pretty=format:%s"],
+            ["git", "log", log_range, "--pretty=format:%s"],
             cwd=samples_repo,
         )
     except subprocess.CalledProcessError:
-        warn(f"Could not read git log relative to origin/{base_branch}. Trying HEAD~20...")
+        warn(f"Could not read git log for {log_range}. Trying HEAD~20...")
         log = run(["git", "log", "HEAD~20..HEAD", "--pretty=format:%s"], cwd=samples_repo)
 
     samples: list[str] = []
@@ -235,13 +254,7 @@ def main() -> None:
     pr_body = build_batch_pr_body(sample_names)
 
     # ── 5. Create PR ───────────────────────────────────────────────────────────
-    count = len(sample_names)
-    if count == 0:
-        pr_title = "samples: add batch connector integration samples"
-    elif count == 1:
-        pr_title = f"samples: add {sample_names[0]} connector integration sample"
-    else:
-        pr_title = f"samples: add {count} connector integration samples"
+    pr_title = f"samples: adding samples from {args.branch}"
 
     fork_owner = fork.split("/")[0]
     head = f"{fork_owner}:{args.branch}"
@@ -255,10 +268,25 @@ def main() -> None:
         print("=" * 79)
         return
 
-    pr_url = create_pr(
-        fork, args.branch, ", ".join(sample_names) if sample_names else "batch",
-        pr_body, args.upstream, args.base_branch, args.dry_run,
-    )
+    info(f"Creating PR: {args.upstream} ← {head}")
+    try:
+        import subprocess as sp
+        result = sp.run(
+            [
+                "gh", "pr", "create",
+                "--repo", args.upstream,
+                "--head", head,
+                "--base", args.base_branch,
+                "--title", pr_title,
+                "--body", pr_body,
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        pr_url = result.stdout.strip()
+    except sp.CalledProcessError as e:
+        fail(f"Failed to create PR:\n{e.stderr.strip()}")
 
     print()
     print("=" * 79)

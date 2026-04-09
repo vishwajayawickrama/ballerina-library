@@ -431,39 +431,47 @@ If the goal uses an event listener entry point, or the connector can be called d
 
     **10a. Reveal and click the correct + (Add Step) button:**
     - Call ${bt}browser_snapshot${bt} and locate the saved remote-function node by its operation name on the canvas. Note its accessibility ${bt}ref${bt}.
-    - The + (Add Step) button on the connector edge **between the operation node and the Error Handler node** is **hidden until you hover that edge**. The accessibility snapshot will not list it as interactable until it becomes visible.
-    - Call ${bt}browser_hover${bt} targeting the operation node's ${bt}ref${bt}, then call ${bt}browser_snapshot${bt} again — the + button on the edge below the operation should now appear in the tree.
-    - Click that + button via its accessibility ${bt}ref${bt} from the snapshot.
+    - The + (Add Step) button on the connector edge between nodes is a pure-SVG element hidden from the accessibility tree by default. Try the preferred path first:
+       - **Preferred path — hover + snapshot**: Call ${bt}browser_hover${bt} targeting the operation node's ${bt}ref${bt}, then call ${bt}browser_snapshot${bt} again. If the + button appears in the new snapshot, click it via its accessibility ${bt}ref${bt}. Done.
+    - **Fallback — indexed ${bt}link-add-button-N${bt} (ONLY if hover + snapshot fails to surface the +):** The canvas exposes SVG add-buttons with ${bt}data-testid="link-add-button-N"${bt}. You may use ${bt}browser_evaluate${bt} to dispatch a synthetic click on one of these, **but you MUST click the right index**. For a flow with exactly one user step (the remote function) between Start and Error Handler — which is the case here, since you just saved the remote function as the first and only step — the mapping is:
+       - ${bt}link-add-button-0${bt} → between **Start** and the **operation** (FORBIDDEN — before the op).
+       - ${bt}link-add-button-1${bt} → between the **operation** and the **Error Handler** (CORRECT — this is inside the ${bt}do { }${bt} block where ${bt}result${bt} is in scope).
+       - ${bt}link-add-button-2${bt} → **below the Error Handler** (FORBIDDEN — outside the ${bt}do { }${bt} block; ${bt}result${bt} is NOT in scope there; any Log step placed here will fail to compile with "undefined symbol 'result'").
+    - **If using the fallback, you MUST click ${bt}link-add-button-1${bt} and nothing else.** This fallback only holds for flows with exactly one user step before the Error Handler (our case). If the automation already has multiple user steps, do not index-guess — stick with the preferred hover + snapshot path.
+    - **Sanity check before picking Log Info**: after the + click opens the node panel, call ${bt}browser_snapshot${bt} and confirm the "Select node from node panel." placeholder appears **above** the Error Handler, not below it. If it appears below, close the node panel and retry with the correct + button.
     - **Forbidden positions (do NOT click any of these):**
        - The + button **above** the operation node (between Start and the operation).
-       - The + button **below the Error Handler** — there is nothing valid there for an automation. A Log node placed there is a hard failure.
-       - Any + button inside an **expanded sub-block of the Error Handler** (the Error Handler can be expanded — do not add steps inside its body).
-    - **Forbidden technique:** Do NOT use ${bt}browser_evaluate${bt} to find an indexed selector like ${bt}link-add-button-N${bt} and click it directly — that gambles on the index and is exactly what landed previous runs below the Error Handler. If ${bt}browser_hover${bt} on the operation node does not reveal the +, you may use ${bt}browser_evaluate${bt} strictly to dispatch a ${bt}mouseenter${bt} over the connector area, but you must then re-snapshot and click the resulting visible button via its accessibility ${bt}ref${bt}, never via index guessing.
+       - The + button **below the Error Handler** (${bt}link-add-button-2${bt}) — there is nothing valid there for an automation. A Log node placed there lands outside the ${bt}do { }${bt} block and fails to compile.
+       - Any + button inside an **expanded sub-block of the Error Handler** (the Error Handler can be expanded — do not add steps inside its ${bt}on fail { }${bt} body).
 
     **10b. Pick the Log Info action:**
     - In the node panel that opens, locate the **Logging** group and select **Log Info** (or, if the UI uses a different label, the closest equivalent print/console action discovered via ${bt}browser_snapshot${bt} — do NOT assume).
 
-    **10c. Insert the result variable via the Variables helper menu (MANDATORY):**
-    - The Log Info form opens with the **Msg** field in **Text mode** (the ${bt}Text | Expression${bt} toggle on the right shows Text highlighted). **Leave it in Text mode.** Do NOT switch to Expression mode.
-    - **Why not Expression mode:** Typing variable names into the expression input fires a name-resolution check that runs against a stale parser snapshot and incorrectly reports ${bt}undefined symbol 'result'${bt}, even though ${bt}result${bt} is bound by the previous step. Pressing Tab does not clear it. The Variables helper menu (described next) sidesteps this entirely.
-    - Click into the Msg field. A small helper popover appears anchored to the field with four categories: **Inputs**, **Variables**, **Configurables**, **Functions**.
-    - Click **Variables** in that popover.
-    - The Variables list shows all in-scope variables produced by previous steps in the flow. Find the variable bound in step 7 — by default this is named ${bt}result${bt}, but for some connectors it may carry the operation's natural name (look for the variable whose type matches the operation's return record).
-    - Click that variable name. The editor inserts a properly-resolved reference into the Msg field, rendered as a chip/pill (not raw text). Internally this is a Ballerina string-template interpolation of the variable, which auto-coerces any type to string for the message field — **no manual ${bt}.toString()${bt} is needed**.
-    - After insertion, the Save button on the Log Info form should become enabled with **no ${bt}undefined symbol${bt} warning**. Re-snapshot to confirm.
+    **10c. Configure the Msg field in Expression mode:**
+    - Click into the **Msg** field, then click the **Expression** tab on the right side of the ${bt}Text | Expression${bt} toggle.
+    - In the expression input, type one of:
+       - ${bt}result.toJsonString()${bt} — **preferred** for record, array, or JSON-like return types. Produces readable JSON in the log output.
+       - ${bt}result.toString()${bt} — acceptable for primitive return types (string, int, boolean, decimal).
+       - When in doubt, use ${bt}result.toJsonString()${bt} — it works for every Ballerina value, including primitives.
+    - The expression input has a **live validator**. Watch the Save button and the validator message after typing:
+       - **Happy path**: no red underline, no warning, Save becomes enabled. Proceed to 10d.
+       - **If you see ${bt}undefined symbol 'result'${bt} (or any "symbol not found" variant):** this is **NOT a parser-lag glitch or a timing issue**. It is a **reliable signal that the Log step is in the wrong position** — the insertion point is outside the ${bt}do { }${bt} block that binds ${bt}result${bt}. Do **NOT** try to bypass it by opening the Variables helper, switching modes, pressing Tab, or force-clicking Save. Instead:
+          1. Close the Log Info form via its × button (or ${bt}Escape${bt}).
+          2. Call ${bt}browser_snapshot${bt} to re-inspect the canvas. If a stray Log placeholder is visible below the Error Handler, the previous + click landed outside the ${bt}do { }${bt} block.
+          3. Go back to step 10a and pick the **correct** + button — specifically ${bt}link-add-button-1${bt} if you used the indexed fallback, or re-do the hover + snapshot path.
     - **FORBIDDEN failure-mode workarounds (each one is a hard failure of this step):**
-       - Switching to **Expression mode** and typing ${bt}result${bt} or ${bt}result.toString()${bt} directly. The validator rejects it.
        - Typing a hardcoded literal string into Text mode (e.g., "Operation completed successfully", "Result fetched", "Subscription types fetched successfully"). The whole point of this step is to print the **value** of the result variable, not a celebratory string.
-       - Using ${bt}browser_evaluate${bt} to ${bt}removeAttribute('disabled')${bt} from the Save button and then clicking it. This persists a broken Log step with a red error indicator on the canvas. **Force-clicking past validation errors is treated as a hard failure of this step.**
+       - Using ${bt}browser_evaluate${bt} to ${bt}removeAttribute('disabled')${bt} from the Save button and clicking it. This persists a broken Log step with a red error indicator on the canvas. **Force-clicking past validation errors is a hard failure of this step.**
+       - Trying to "work around" an ${bt}undefined symbol${bt} error via the Variables helper, Tab-to-revalidate, or any other technique. The only correct response to that error is to reposition the step (close → snapshot → retry step 10a with the correct + button).
 
     **10d. Save normally (no force-clicks):**
-    - If a helper / Variables side panel still overlaps the Save button after variable insertion, close it via its × button or ${bt}Escape${bt} first, then re-snapshot.
+    - If a helper / side panel (e.g. the Inputs/Variables/Configurables/Functions popover) is still overlapping the Save button, close it via its × button or ${bt}Escape${bt} first, then re-snapshot.
     - Click the **Save** button on the Log Info form via the snapshot's accessibility ${bt}ref${bt}. Do NOT force-click via JS, do NOT remove the ${bt}disabled${bt} attribute, do NOT bypass any validation.
-    - If Save is still disabled after correctly inserting the variable via the Variables helper, the variable was not actually inserted — re-open the Msg field, re-do step 10c, and try again. Do not bypass.
+    - If Save is still disabled after typing the expression in 10c with no ${bt}undefined symbol${bt} error, something else on the form is invalid — re-snapshot, inspect the form for other validation warnings, and fix before saving. Do not bypass.
 
     **10e. Verify placement and absence of error indicators:**
     - After save, call ${bt}browser_snapshot${bt} and verify ALL of the following. Failure on any check means redo, not progression to step 11.
-       1. A new **log : printInfo** node appears on the canvas with the result variable rendered in its Msg expression (as a chip/pill or as a string-template interpolation of the variable), **not** as a literal hardcoded string.
+       1. A new **log : printInfo** node appears on the canvas with ${bt}result.toJsonString()${bt} (or ${bt}result.toString()${bt}) rendered in its Msg expression, **not** as a literal hardcoded string.
        2. The Log node sits **directly between the remote function node and the Error Handler node** on the main vertical flow path (top-to-bottom: Start → operation → log:printInfo → Error Handler).
        3. The Log node has **no red error indicator** (no warning icon, no red border). A node that saved with a validation error counts as failure even if it appears on the canvas.
        4. The Log node is **not below** the Error Handler and **not inside** an expanded Error Handler sub-block.
@@ -702,8 +710,8 @@ node to print the ${bt}result${bt} variable.]
 [Include this step ONLY if the operation returns a value (a ${bt}result${bt} variable was bound in the previous step). SKIP entirely for void operations. Use a numbered sub-list:]
 1. [First action — e.g., "Hover the [OperationName] node on the canvas to reveal the **+ (Add Step)** button on the connector edge below it (between the operation and the Error Handler), then click it."]
 2. [Second action — e.g., "From the node panel, expand **Logging** and select **Log Info**."]
-3. [Third action — e.g., "Leave the **Msg** field in **Text** mode (default). Click into it to open the helper popover, choose **Variables**, then click the **${bt}result${bt}** variable from the in-scope list — this inserts a string-template reference automatically. Do NOT switch to Expression mode and do NOT type the variable name manually."]
-4. [Final action — e.g., "Close the helper popover if it is still open, then select **Save** to add the Log step to the flow. The new ${bt}log : printInfo${bt} node should appear between the [OperationName] node and the Error Handler with no error indicator."]
+3. [Third action — e.g., "Switch the **Msg** field to **Expression** mode and enter ${bt}result.toJsonString()${bt} (or ${bt}result.toString()${bt} for primitive return types). If the form shows an ${bt}undefined symbol 'result'${bt} error, the Log step is in the wrong position — close it and re-insert using the + button between the [OperationName] node and the Error Handler."]
+4. [Final action — e.g., "Close any side popover that is overlapping the Save button, then select **Save** to add the Log step to the flow. The new ${bt}log : printInfo${bt} node should appear between the [OperationName] node and the Error Handler with no error indicator."]
 ![completed flow showing entry point, [OperationName] node, and Log of result](../screenshots/${screenshotPrefix}_screenshot_06_completed_flow.png)
 
 [If the operation is void and Step N+2 was skipped, embed the completed-flow screenshot at the end of Step N+1 instead, immediately after the operation save action:
