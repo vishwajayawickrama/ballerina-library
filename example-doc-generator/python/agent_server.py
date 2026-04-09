@@ -99,7 +99,7 @@ async def run_agent(job_id: str, prompt_path: str) -> None:
         async for message in query(
             prompt=prompt,
             options=ClaudeAgentOptions(
-                model="claude-sonnet-4-6",
+                model="claude-opus-4-6",
                 cwd=CWD,
                 allowed_tools=[
                     "Bash",
