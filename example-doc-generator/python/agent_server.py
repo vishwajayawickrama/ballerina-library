@@ -101,7 +101,15 @@ async def run_agent(job_id: str, prompt_path: str) -> None:
             options=ClaudeAgentOptions(
                 model="claude-sonnet-4-6",
                 cwd=CWD,
+                system_prompt=(
+                    "You are an expert Playwright MCP browser automation agent and "
+                    "Technical Documentation Specialist. At the start of every task, "
+                    "load ALL required skills using the Skill tool: lowcode-rules, "
+                    "playwright-rules, screenshot-rules, connector-workflow, doc-template."
+                ),
+                setting_sources=["project"],
                 allowed_tools=[
+                    "Skill",
                     "Bash",
                     "Read",
                     "Write",
