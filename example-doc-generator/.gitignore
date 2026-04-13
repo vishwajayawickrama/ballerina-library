@@ -46,6 +46,10 @@ Thumbs.db
 *.msi
 .LSOverride
 
+# VS Code extensions (install from marketplace instead)
+extensions/
+*.vsix
+
 # Playwright
 .playwright-mcp/
 .playwright/
