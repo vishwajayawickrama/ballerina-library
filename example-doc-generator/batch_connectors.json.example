@@ -1,0 +1,9 @@
+{
+  "connectors": [
+    { "name": "mysql" },
+    { "name": "zoom.meetings", "instructions": "Use BearerTokenConfig for authentication." },
+    { "name": "aws.sns", "instructions": "Use StaticCredentialsConfig." }
+  ],
+  "docsBranch": "docs/connector-docs",
+  "samplesBranch": "samples/connector-samples"
+}

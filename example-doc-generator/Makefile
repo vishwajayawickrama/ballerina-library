@@ -7,6 +7,7 @@
         batch-pr-docs batch-pr-docs-dry \
         batch-commit-sample batch-commit-sample-dry \
         batch-pr-samples batch-pr-samples-dry \
+        batch-run batch-run-dry \
         publish-sample publish-sample-dry publish-sample-no-pr publish-sample-no-publish \
         publish-all publish-all-dry publish-all-no-preview publish-all-no-pr publish-all-open \
         cleanup cleanup-dry \
@@ -71,6 +72,14 @@ help:
 	@echo "    BATCH_PR_SAMPLES_ARGS=<flags>               Extra flags for batch_pr_samples.py"
 	@echo "    Workflow: run pipeline for each connector → 'make batch-commit-sample' each time"
 	@echo "              → 'make batch-pr-samples BRANCH=...' once when all samples are committed"
+	@echo ""
+	@echo "  Batch Run (queue multiple connectors sequentially)"
+	@echo "    make batch-run                    Run queue from batch_connectors.json"
+	@echo "    make batch-run-dry                Print planned execution order, no changes"
+	@echo "    BATCH_CONFIG=path.json            Override config file (default: batch_connectors.json)"
+	@echo "    BATCH_RUN_ARGS='--no-resume'      Extra flags: --no-resume, --create-prs, --timeout N"
+	@echo "    Workflow: 1) make batch-run  2) review artifacts_archive/  3) commit approved connectors"
+	@echo "              4) make batch-pr-docs BRANCH=...  5) make batch-pr-samples BRANCH=..."
 	@echo ""
 	@echo "  Publish Sample"
 	@echo "    make publish-sample               Publish integration sample PR + delete local project + close tabs"
@@ -368,6 +377,18 @@ batch-pr-samples-dry: python/.venv/.installed
 	@test -n "$(BRANCH)" || (echo "[ERROR] BRANCH is required." && exit 1)
 	@echo "→ Dry run: create PR from batch samples branch: $(BRANCH)"
 	$(_batch_pr_samples_cmd) --dry-run
+
+# ── Batch Run (queue multiple connectors) ─────────────────────────────────────
+BATCH_CONFIG ?= batch_connectors.json
+BATCH_RUN_ARGS ?=
+
+batch-run: python/.venv/.installed
+	@echo "→ Running batch pipeline from $(BATCH_CONFIG)..."
+	python/.venv/bin/python python/batch_run.py --config "$(BATCH_CONFIG)" $(BATCH_RUN_ARGS)
+
+batch-run-dry: python/.venv/.installed
+	@echo "→ Batch pipeline dry run..."
+	python/.venv/bin/python python/batch_run.py --config "$(BATCH_CONFIG)" --dry-run $(BATCH_RUN_ARGS)
 
 # ── Publish all (docs + sample) ───────────────────────────────────────────────
 # Reuses the same override vars as the individual publish targets.

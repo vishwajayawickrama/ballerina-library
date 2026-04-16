@@ -52,6 +52,11 @@ Thumbs.db
 
 # All generated run artifacts (screenshots, execution-prompt, workflow-docs)
 artifacts/
+artifacts_archive/
+
+# Batch run state and config (contain local paths / user-specific connector lists)
+batch_connectors.json
+batch_state.json
 
 # Temporary files
 tmp/
