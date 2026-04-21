@@ -224,7 +224,7 @@ def copy_sample(
         dry(f"Copy {actual_project} → {dest}")
         return dest
     dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(str(actual_project), str(dest))
+    shutil.copytree(str(actual_project), str(dest), dirs_exist_ok=True)
     info(f"Copied sample to: {dest}")
     return dest
 
@@ -262,6 +262,10 @@ def commit_and_push(
         )
     info("Committing changes...")
     subprocess.run(["git", "add", "--", staged_path], cwd=str(samples_repo), check=True)
+    diff_index = subprocess.run(["git", "diff", "--cached", "--quiet"], cwd=str(samples_repo))
+    if diff_index.returncode == 0:
+        warn(f"Nothing new to commit for '{project_name}' — sample already up to date on branch '{branch_name}'.")
+        return
     subprocess.run(
         ["git", "commit", "-m", f"samples: add {project_name} connector integration sample"],
         cwd=str(samples_repo),

@@ -83,7 +83,7 @@ You are also a Technical Documentation Specialist — after automation, write th
 | Property | Value |
 |----------|-------|
 | **Platform** | Code-Server — WSO2 Integrator extension (in-browser VS Code) |
-| **Implementation mode** | Low-Code Only (no pro-code / no source editing) |
+| **Implementation mode** | Low-Code Only (pro-code allowed ONLY for adding the log:printInfo line in step 10) |
 | **Automation method** | Playwright MCP tool calls only (no script files) |
 | [Add 2-5 goal-specific requirement rows — e.g., connector type, database type, endpoint method, response format, etc.] |
 | **Documentation format** | Markdown with embedded screenshots |
@@ -105,6 +105,7 @@ You are also a Technical Documentation Specialist — after automation, write th
 - **If a .bal file tab opens automatically** (e.g., VS Code auto-opens it when creating an integration), **immediately close that editor tab** — click the × on the tab or use Ctrl+W — before proceeding. Do NOT read, inspect, or document its contents.
 - **If any source code window or code editor tab is open**, close it before taking any milestone screenshot. Screenshots must never show source code.
 - If a step appears to require manual code editing, **stop and request user guidance**.
+- **ONE EXCEPTION — Step 10 (Log the result):** You ARE allowed to read and edit ${bt}automation.bal${bt} directly (using the ${bt}Read${bt} and ${bt}Edit${bt} tools) to add the ${bt}log:printInfo(result.toJsonString());${bt} line. This is the ONLY step where pro-code access is permitted, and it must happen AFTER screenshot 5 is taken and the operation is saved. Do NOT access ${bt}automation.bal${bt} (via Show Source, the file tree, or any other method) before screenshot 5 is taken — doing so will contaminate screenshots with the source panel.
 - Do **NOT** click the **Expression** toggle/button for any connection parameter field — this includes boolean fields. Boolean fields (showing a true/false dropdown) must be set by selecting from the dropdown, never by switching to Expression mode. For non-boolean fields, use the helper panel directly without switching to Expression mode.
 - **Record Configuration modal — close immediately after entering values (MANDATORY):** Whenever a "Record Configuration" modal opens (title "Record Configuration", has a ${bt}×${bt} close button top-right and a ${bt}←${bt} back button top-left), fill in all required values and then **immediately close it** using the ${bt}×${bt} or ${bt}←${bt} button before doing anything else. Do NOT leave the Record Configuration modal open while performing subsequent workflow steps. It does NOT close on Escape — you must click ${bt}×${bt} or ${bt}←${bt}. After closing, call ${bt}browser_snapshot${bt} to confirm the modal is gone before proceeding.
 </rules_lowcode>
@@ -412,72 +413,74 @@ If the goal uses an event listener entry point, or the connector can be called d
    - **MANDATORY — close the Record Configuration modal immediately after entering values:** After completing all entries in the Record Configuration panel, click its ${bt}×${bt} (top-right) or ${bt}←${bt} (top-left) button to close it **before proceeding to any other step**. Call ${bt}browser_snapshot${bt} to confirm it is dismissed. Do NOT leave it open.
 7. Inspect the operation panel for an output / "Result" / "Return Variable" / "Result Variable" field. **If the operation produces a return value, ALWAYS bind it to a local variable named ${bt}result${bt}** (do not skip this when the field is present, even if it appears optional). If the operation is void and no output/result field is shown in the panel, skip the binding.
    - **Return-type neutrality**: Do NOT enumerate or assume specific operation return type names (e.g. ${bt}ExecutionResult${bt}, ${bt}Response${bt}, ${bt}Payload${bt}). Discover whether a return-value field exists at run time via ${bt}browser_snapshot${bt}.
-8. **MANDATORY screenshot 5**: After populating ALL operation input fields / Record Configuration, take a screenshot showing all filled values — before or after clicking Save. Before calling ${bt}browser_take_screenshot${bt}, you MUST execute ALL of the following steps in this exact order:
-   1. **Close ALL overlays and helper panels**: Call ${bt}browser_snapshot${bt} to inspect what is currently visible. Close any open panels:
+8. **MANDATORY screenshot 5**: After populating ALL operation input fields / Record Configuration, take a screenshot showing all filled values — **BEFORE clicking Save** (the operation form must still be visible). Before calling ${bt}browser_take_screenshot${bt}, you MUST execute ALL of the following steps in this exact order:
+   1. **Close ALL open .bal source file tabs — MANDATORY**: Call ${bt}browser_snapshot${bt} and inspect the editor tab bar. If ${bt}automation.bal${bt}, ${bt}connections.bal${bt}, ${bt}config.bal${bt}, or any other .bal file is open as a tab, close each one by clicking the × button directly on that tab. The operation form must be the ONLY thing visible — no source code panel, no split editor. Confirm with ${bt}browser_snapshot${bt} after closing.
+   2. **Close ALL overlays and helper panels**: Call ${bt}browser_snapshot${bt} to inspect what is currently visible. Close any open panels:
       - **"Record Configuration" modal** (title "Record Configuration", has ${bt}×${bt} close button top-right and ${bt}←${bt} back button top-left): does NOT close on Escape — click its ${bt}×${bt} or ${bt}←${bt} button, then call ${bt}browser_snapshot${bt} to confirm it is gone.
       - **Helper/Configurable side panel**: press ${bt}Escape${bt} or click its close button to dismiss it.
       - After closing all overlays, call ${bt}browser_snapshot${bt} and verify: the ONLY thing visible is the operation configuration form with no overlapping panels or modals.
-   2. **Scroll both panels to the top**: Call ${bt}browser_evaluate${bt} twice — once for the left-side operation form container and once for the right-hand side panel (the live preview / code view panel). Set each scrollable element's ${bt}scrollTop${bt} to 0. Inspect the DOM via ${bt}browser_snapshot${bt} to identify both scrollable elements. The right-hand panel is typically a sibling container to the left form panel inside the same split-panel layout.
-   3. **Verify**: Call ${bt}browser_snapshot${bt} and confirm (a) no overlay is present and (b) the topmost fields of the operation form are visible.
-   4. **Only then** call ${bt}browser_take_screenshot${bt}. Every configured field must be visible.
+   3. **Scroll both panels to the top**: Call ${bt}browser_evaluate${bt} twice — once for the left-side operation form container and once for the right-hand side panel (the live preview / code view panel). Set each scrollable element's ${bt}scrollTop${bt} to 0. Inspect the DOM via ${bt}browser_snapshot${bt} to identify both scrollable elements. The right-hand panel is typically a sibling container to the left form panel inside the same split-panel layout.
+   4. **Verify**: Call ${bt}browser_snapshot${bt} and confirm (a) no overlay is present, (b) no .bal source tab is visible in the tab bar, and (c) the topmost fields of the operation form are visible.
+   5. **Only then** call ${bt}browser_take_screenshot${bt}. Every configured field must be visible.
    - **CRITICAL placement rule**: Embed in the step that describes selecting the operation AND filling its values. Do NOT embed it in a step that describes only expanding the operations panel.
    - **Filename**: ${bt}${screenshotPrefix}_screenshot_05_operation_filled.png${bt}.
 9. Save / confirm the remote function configuration.
-10. **Log the result (CONDITIONAL — only if a ${bt}result${bt} variable was bound in step 7):** Add one more step to the flow that prints the returned value. If the operation was void (no ${bt}result${bt} variable bound), SKIP this entire step. Do NOT take a separate screenshot here — the next step (screenshot 06) will capture this Log node as part of the completed flow.
+10. **Log the result via pro-code edit (CONDITIONAL — only if a ${bt}result${bt} variable was bound in step 7):** Add a ${bt}log:printInfo()${bt} call that prints the returned value by directly editing ${bt}automation.bal${bt} in the code editor. If the operation was void (no ${bt}result${bt} variable bound), SKIP this entire step. Do NOT take a separate screenshot here — the next step (screenshot 06) will capture this Log node as part of the completed flow.
 
-    **CRITICAL — automation flow topology:** The body of an entry-point Automation is structured top-to-bottom as **Start → [your steps in order] → Error Handler**. The **Error Handler** node at the bottom is the closing ${bt}on fail { }${bt} block of the main ${bt}do { }${bt} body — it is **NOT a separate error branch** to avoid, and there is **NO "End" or "Stop" node beneath it**. The Log step MUST be inserted in the main flow body, **between the remote function node and the Error Handler node**, on the same vertical edge. A Log node that lands below the Error Handler is structurally broken.
+    **Why pro-code for this step only:** The low-code UI for adding a Log Info node has positioning issues — the node sometimes lands between the Error Handler and the end instead of between the remote function and the Error Handler. Editing the source file directly is deterministic and avoids these placement bugs. This is the ONE exception to the "no pro-code" rule — it applies ONLY to this Log step.
 
-    **10a. Reveal and click the correct + (Add Step) button:**
-    - Call ${bt}browser_snapshot${bt} and locate the saved remote-function node by its operation name on the canvas. Note its accessibility ${bt}ref${bt}.
-    - The + (Add Step) button on the connector edge between nodes is a pure-SVG element hidden from the accessibility tree by default. Try the preferred path first:
-       - **Preferred path — hover + snapshot**: Call ${bt}browser_hover${bt} targeting the operation node's ${bt}ref${bt}, then call ${bt}browser_snapshot${bt} again. If the + button appears in the new snapshot, click it via its accessibility ${bt}ref${bt}. Done.
-    - **Fallback — indexed ${bt}link-add-button-N${bt} (ONLY if hover + snapshot fails to surface the +):** The canvas exposes SVG add-buttons with ${bt}data-testid="link-add-button-N"${bt}. You may use ${bt}browser_evaluate${bt} to dispatch a synthetic click on one of these, **but you MUST click the right index**. For a flow with exactly one user step (the remote function) between Start and Error Handler — which is the case here, since you just saved the remote function as the first and only step — the mapping is:
-       - ${bt}link-add-button-0${bt} → between **Start** and the **operation** (FORBIDDEN — before the op).
-       - ${bt}link-add-button-1${bt} → between the **operation** and the **Error Handler** (CORRECT — this is inside the ${bt}do { }${bt} block where ${bt}result${bt} is in scope).
-       - ${bt}link-add-button-2${bt} → **below the Error Handler** (FORBIDDEN — outside the ${bt}do { }${bt} block; ${bt}result${bt} is NOT in scope there; any Log step placed here will fail to compile with "undefined symbol 'result'").
-    - **If using the fallback, you MUST click ${bt}link-add-button-1${bt} and nothing else.** This fallback only holds for flows with exactly one user step before the Error Handler (our case). If the automation already has multiple user steps, do not index-guess — stick with the preferred hover + snapshot path.
-    - **Sanity check before picking Log Info**: after the + click opens the node panel, call ${bt}browser_snapshot${bt} and confirm the "Select node from node panel." placeholder appears **above** the Error Handler, not below it. If it appears below, close the node panel and retry with the correct + button.
-    - **Forbidden positions (do NOT click any of these):**
-       - The + button **above** the operation node (between Start and the operation).
-       - The + button **below the Error Handler** (${bt}link-add-button-2${bt}) — there is nothing valid there for an automation. A Log node placed there lands outside the ${bt}do { }${bt} block and fails to compile.
-       - Any + button inside an **expanded sub-block of the Error Handler** (the Error Handler can be expanded — do not add steps inside its ${bt}on fail { }${bt} body).
+    **10a. Read the file with the ${bt}Read${bt} tool — do NOT open VS Code or click "Show Source":**
+    - You do NOT need to open ${bt}automation.bal${bt} in VS Code. Do NOT click the "Show Source" button. Do NOT open the file explorer to navigate to the file.
+    - Simply use the ${bt}Read${bt} tool with the absolute path to ${bt}automation.bal${bt} (e.g., ${bt}/Users/vishwajayawickrama/bi-workspace/<project-name>/automation.bal${bt}) to read its content directly.
+    - The project path was written to the run-log in Stage 3. Use it to construct the file path.
 
-    **10b. Pick the Log Info action:**
-    - In the node panel that opens, locate the **Logging** group and select **Log Info** (or, if the UI uses a different label, the closest equivalent print/console action discovered via ${bt}browser_snapshot${bt} — do NOT assume).
+    **10b. Add the log line by editing the file directly on disk (MANDATORY — do NOT type in the VS Code editor):**
 
-    **10c. Configure the Msg field in Expression mode:**
-    - Click into the **Msg** field, then click the **Expression** tab on the right side of the ${bt}Text | Expression${bt} toggle.
-    - In the expression input, type one of:
-       - ${bt}result.toJsonString()${bt} — **preferred** for record, array, or JSON-like return types. Produces readable JSON in the log output.
-       - ${bt}result.toString()${bt} — acceptable for primitive return types (string, int, boolean, decimal).
-       - When in doubt, use ${bt}result.toJsonString()${bt} — it works for every Ballerina value, including primitives.
-    - The expression input has a **live validator**. Watch the Save button and the validator message after typing:
-       - **Happy path**: no red underline, no warning, Save becomes enabled. Proceed to 10d.
-       - **If you see ${bt}undefined symbol 'result'${bt} (or any "symbol not found" variant):** this is **NOT a parser-lag glitch or a timing issue**. It is a **reliable signal that the Log step is in the wrong position** — the insertion point is outside the ${bt}do { }${bt} block that binds ${bt}result${bt}. Do **NOT** try to bypass it by opening the Variables helper, switching modes, pressing Tab, or force-clicking Save. Instead:
-          1. Close the Log Info form via its × button (or ${bt}Escape${bt}).
-          2. Call ${bt}browser_snapshot${bt} to re-inspect the canvas. If a stray Log placeholder is visible below the Error Handler, the previous + click landed outside the ${bt}do { }${bt} block.
-          3. Go back to step 10a and pick the **correct** + button — specifically ${bt}link-add-button-1${bt} if you used the indexed fallback, or re-do the hover + snapshot path.
-    - **FORBIDDEN failure-mode workarounds (each one is a hard failure of this step):**
-       - Typing a hardcoded literal string into Text mode (e.g., "Operation completed successfully", "Result fetched", "Subscription types fetched successfully"). The whole point of this step is to print the **value** of the result variable, not a celebratory string.
-       - Using ${bt}browser_evaluate${bt} to ${bt}removeAttribute('disabled')${bt} from the Save button and clicking it. This persists a broken Log step with a red error indicator on the canvas. **Force-clicking past validation errors is a hard failure of this step.**
-       - Trying to "work around" an ${bt}undefined symbol${bt} error via the Variables helper, Tab-to-revalidate, or any other technique. The only correct response to that error is to reposition the step (close → snapshot → retry step 10a with the correct + button).
+    **CRITICAL: Do NOT attempt to click in the Monaco editor and type the log line.** Typing in the VS Code Monaco editor via browser automation is unreliable — it routinely drops characters, inserts stray text, or mis-positions the cursor. The ONLY correct approach is to use the ${bt}Read${bt} and ${bt}Edit${bt} tools to modify the file on disk directly.
 
-    **10d. Save normally (no force-clicks):**
-    - If a helper / side panel (e.g. the Inputs/Variables/Configurables/Functions popover) is still overlapping the Save button, close it via its × button or ${bt}Escape${bt} first, then re-snapshot.
-    - Click the **Save** button on the Log Info form via the snapshot's accessibility ${bt}ref${bt}. Do NOT force-click via JS, do NOT remove the ${bt}disabled${bt} attribute, do NOT bypass any validation.
-    - If Save is still disabled after typing the expression in 10c with no ${bt}undefined symbol${bt} error, something else on the form is invalid — re-snapshot, inspect the form for other validation warnings, and fix before saving. Do not bypass.
+    Follow these steps:
+    1. **Read the file**: Use the ${bt}Read${bt} tool on the ${bt}automation.bal${bt} file path you found in step 10a (e.g., ${bt}/Users/.../automation.bal${bt}). This gives you the exact current content.
+    2. **Identify the insertion point**: Find the line containing the ${bt}result${bt} variable assignment — the line with ${bt}check <client>-><operation>(...)${bt}. The ${bt}log:printInfo()${bt} call must go on the NEXT line, still inside the ${bt}do { }${bt} block, before the ${bt}} on fail${bt} line.
+    3. **Use the ${bt}Edit${bt} tool** to insert the log line. Match the exact text of the ${bt}result${bt} assignment line plus the following ${bt}} on fail${bt} line as the ${bt}old_string${bt}, and replace it with those two lines plus the log call inserted between them. Example:
+       - ${bt}old_string${bt}: ${bt}        <ResultType> result = check <client>-><operation>(...);\n    } on fail error e {${bt}
+       - ${bt}new_string${bt}: ${bt}        <ResultType> result = check <client>-><operation>(...);\n        log:printInfo(result.toJsonString());\n    } on fail error e {${bt}
+    4. **Verify**: Use the ${bt}Read${bt} tool again to confirm the file now contains ${bt}log:printInfo(result.toJsonString());${bt} on the correct line with proper indentation.
+    - If the result type is a primitive (string, int, boolean), ${bt}log:printInfo(result.toString());${bt} is also acceptable. When in doubt, use ${bt}toJsonString()${bt}.
+
+    **10c. Close ALL open .bal editor tabs — this is the IMMEDIATE NEXT ACTION after step 10b. Do NOT click "Show Visualizer", do NOT click any sidebar entry, do NOT navigate anywhere until this step is fully done.**
+
+    The ${bt}Edit${bt} tool has already saved the file to disk. You do NOT need to press Ctrl+S.
+
+    1. Call ${bt}browser_snapshot${bt} to see which editor tabs are currently open.
+    2. For EACH .bal tab visible in the editor tab bar (${bt}automation.bal${bt}, ${bt}connections.bal${bt}, ${bt}config.bal${bt}, or any other .bal file):
+       a. Click the × (close) button **directly on that specific tab**.
+       b. Call ${bt}browser_snapshot${bt} immediately after to confirm that tab is gone.
+    3. After all .bal tabs are closed, call ${bt}browser_snapshot${bt} and verify:
+       - The editor tab bar shows **NO .bal source file tabs**.
+       - **NO split-panel / side-by-side source code** is visible anywhere on screen.
+       - If any .bal tab is still visible, close it before proceeding.
+
+    **10d. Navigate to the automation flowchart — only after step 10c is fully verified:**
+    1. Click the **WSO2 Integrator** icon in the left activity bar to open the canvas view.
+    2. Wait 2–3 seconds for it to render. Call ${bt}browser_snapshot${bt} and inspect:
+       - **Correct view (detailed flowchart)**: nodes arranged vertically as Start → operation → log:printInfo → Error Handler — proceed to step 10e.
+       - **Wrong view (project overview)**: a higher-level "Design" canvas with a rectangular "Automation" card and a circular Connection node joined by a line — click the **Automation card** to drill in. Wait 2–3 s, then snapshot again to confirm the flowchart is visible.
 
     **10e. Verify placement and absence of error indicators:**
-    - After save, call ${bt}browser_snapshot${bt} and verify ALL of the following. Failure on any check means redo, not progression to step 11.
-       1. A new **log : printInfo** node appears on the canvas with ${bt}result.toJsonString()${bt} (or ${bt}result.toString()${bt}) rendered in its Msg expression, **not** as a literal hardcoded string.
+    - Call ${bt}browser_snapshot${bt} and verify ALL of the following. Failure on any check means the code edit was incorrect — go back to ${bt}automation.bal${bt} and fix.
+       1. A new **log : printInfo** node appears on the canvas with ${bt}result.toJsonString()${bt} (or ${bt}result.toString()${bt}) rendered in its Msg expression.
        2. The Log node sits **directly between the remote function node and the Error Handler node** on the main vertical flow path (top-to-bottom: Start → operation → log:printInfo → Error Handler).
-       3. The Log node has **no red error indicator** (no warning icon, no red border). A node that saved with a validation error counts as failure even if it appears on the canvas.
+       3. The Log node has **no red error indicator** (no warning icon, no red border).
        4. The Log node is **not below** the Error Handler and **not inside** an expanded Error Handler sub-block.
 11. **MANDATORY screenshot 6**: Take a screenshot of the canvas showing the completed flow — Entry Point (or Automation trigger) → Remote Function → Log (if present) → Error Handler. Capture this on EVERY run, regardless of whether a Log step was added. Before calling ${bt}browser_take_screenshot${bt}, you MUST execute ALL of the following steps in this exact order:
-    1. **Close ALL overlays and helper panels**: Call ${bt}browser_snapshot${bt} to inspect what is currently visible. Close any open configuration panels, modals, or side panels (press ${bt}Escape${bt} or click the ${bt}×${bt} / ${bt}←${bt} buttons). After closing, call ${bt}browser_snapshot${bt} and verify nothing overlaps the canvas.
-    2. **Scroll the canvas to show the full flow**: Call ${bt}browser_evaluate${bt} on the canvas container and set its ${bt}scrollTop${bt} (and ${bt}scrollLeft${bt} if needed) to 0 so the entry point is visible. If the canvas is large, ensure all nodes (Entry Point → Remote Function → Log → Error Handler) are within view.
-    3. **Verify**: Call ${bt}browser_snapshot${bt} and confirm (a) no overlay is present and (b) every node in the flow is visible and connected with no error indicators.
-    4. **Only then** call ${bt}browser_take_screenshot${bt}.
+    1. **Close ALL source code editor tabs — MANDATORY**: Call ${bt}browser_snapshot${bt} and inspect the tab bar. If ANY .bal source file tabs are open (e.g., ${bt}automation.bal${bt}, ${bt}connections.bal${bt}, ${bt}config.bal${bt}), close each one by **clicking the × button directly on that specific tab** — do NOT use ${bt}Ctrl+W${bt} as it may close the wrong editor group in a split-panel layout. The canvas must be the ONLY view visible — no split editor, no side-by-side source file anywhere on screen. After closing all tabs, call ${bt}browser_snapshot${bt} to confirm the tab bar shows no source file tabs and no split panel is present.
+    2. **Confirm the detailed flowchart is visible (not the project overview)**: After closing all source tabs, call ${bt}browser_snapshot${bt} and inspect the canvas:
+       - **Correct view — detailed flowchart**: nodes are arranged vertically as Start → operation node → log:printInfo → Error Handler. Proceed to the next step.
+       - **Wrong view — project overview**: a higher-level "Design" canvas shows a rectangular "Automation" card and a circular Connection node joined by a line. **Click the "Automation" card** to drill into the flowchart. Wait 2–3 seconds, then call ${bt}browser_snapshot${bt} to confirm the detailed flowchart is now visible. If still loading, wait another 2 seconds and snapshot again.
+    3. **Close ALL overlays and helper panels**: Close any open configuration panels, modals, or side panels (press ${bt}Escape${bt} or click the ${bt}×${bt} / ${bt}←${bt} buttons). After closing, call ${bt}browser_snapshot${bt} and verify nothing overlaps the canvas.
+    4. **Scroll the canvas to show the full flow**: Call ${bt}browser_evaluate${bt} on the canvas container and set its ${bt}scrollTop${bt} (and ${bt}scrollLeft${bt} if needed) to 0 so the entry point is visible. If the canvas is large, ensure all nodes (Entry Point → Remote Function → Log → Error Handler) are within view.
+    5. **Verify**: Call ${bt}browser_snapshot${bt} and confirm (a) no overlay is present, (b) no source file tab is visible in the tab bar, and (c) every node in the flow is visible and connected with no error indicators.
+    6. **Only then** call ${bt}browser_take_screenshot${bt}.
     - **Filename**: ${bt}${screenshotPrefix}_screenshot_06_completed_flow.png${bt}.
 
 For EACH goal-specific stage:
@@ -706,10 +709,10 @@ node to print the ${bt}result${bt} variable.]
 
 ### Step N+2: Log the [OperationName] result
 [Include this step ONLY if the operation returns a value (a ${bt}result${bt} variable was bound in the previous step). SKIP entirely for void operations. Use a numbered sub-list:]
-1. [First action — e.g., "Hover the [OperationName] node on the canvas to reveal the **+ (Add Step)** button on the connector edge below it (between the operation and the Error Handler), then click it."]
-2. [Second action — e.g., "From the node panel, expand **Logging** and select **Log Info**."]
-3. [Third action — e.g., "Switch the **Msg** field to **Expression** mode and enter ${bt}result.toJsonString()${bt} (or ${bt}result.toString()${bt} for primitive return types). If the form shows an ${bt}undefined symbol 'result'${bt} error, the Log step is in the wrong position — close it and re-insert using the + button between the [OperationName] node and the Error Handler."]
-4. [Final action — e.g., "Close any side popover that is overlapping the Save button, then select **Save** to add the Log step to the flow. The new ${bt}log : printInfo${bt} node should appear between the [OperationName] node and the Error Handler with no error indicator."]
+1. [First action — e.g., "Select the **automation.bal** tab in the editor tab bar to open the source code view."]
+2. [Second action — e.g., "Locate the line containing the ${bt}result${bt} variable assignment (the ${bt}check <client>-><operation>(...)${bt} line). Click at the end of that line, press **Enter** to create a new line, and type ${bt}log:printInfo(result.toJsonString());${bt}."]
+3. [Third action — e.g., "Press **Ctrl+S** to save the file. Wait a moment for the language server to process the change."]
+4. [Final action — e.g., "Select the **WSO2 Integrator** tab in the editor tab bar to return to the visual flow canvas. The new ${bt}log : printInfo${bt} node should appear between the [OperationName] node and the Error Handler with no error indicator."]
 ![completed flow showing entry point, [OperationName] node, and Log of result](../screenshots/${screenshotPrefix}_screenshot_06_completed_flow.png)
 
 [If the operation is void and Step N+2 was skipped, embed the completed-flow screenshot at the end of Step N+1 instead, immediately after the operation save action:

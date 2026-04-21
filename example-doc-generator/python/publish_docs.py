@@ -249,20 +249,23 @@ def find_latest_doc(artifacts_dir: Path) -> tuple[Path, str]:
     return path, path.read_text(encoding="utf-8")
 
 
-def extract_connector_info(content: str) -> tuple[str, str, str]:
+def extract_connector_info(content: str, artifacts_dir: Path | None = None) -> tuple[str, str, str]:
     """
     Extract connector display name, slug, and primary operation name from the doc.
     Returns (display_name, slug, operation_name).
 
     connector-name.txt written by the Ballerina pipeline is the authoritative source.
+    When *artifacts_dir* is provided, looks for the file there instead of the
+    default ``artifacts/run-log/`` path.
     """
     # connector-name.txt is required — written by the Ballerina pipeline at startup
-    if not CONNECTOR_NAME_FILE.exists():
+    name_file = (artifacts_dir / "run-log" / "connector-name.txt") if artifacts_dir else CONNECTOR_NAME_FILE
+    if not name_file.exists():
         fail(
-            "connector-name.txt not found in artifacts/run-log/. "
+            f"connector-name.txt not found in {name_file.parent}/. "
             "Run the Ballerina pipeline first."
         )
-    raw = CONNECTOR_NAME_FILE.read_text(encoding="utf-8").strip()
+    raw = name_file.read_text(encoding="utf-8").strip()
     if not raw:
         fail("connector-name.txt is empty. Run the Ballerina pipeline first.")
     slug = re.sub(r"[^a-z0-9.]+", "-", raw.lower()).strip("-.")
@@ -875,7 +878,7 @@ def main() -> None:
 
     # ── 1. Read artifacts ─────────────────────────────────────────────────────
     source_doc_path, doc_content = find_latest_doc(artifacts_dir)
-    connector_name, connector_slug, operation_name = extract_connector_info(doc_content)
+    connector_name, connector_slug, operation_name = extract_connector_info(doc_content, artifacts_dir)
     screenshot_files = find_screenshots(artifacts_dir)
 
     # ── 2. Validate docs repo ─────────────────────────────────────────────────

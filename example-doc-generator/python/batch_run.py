@@ -112,10 +112,11 @@ def load_state(cfg: dict, cfg_path: Path, no_resume: bool) -> dict:
 
     if state.get("configHash") != config_hash(cfg):
         print(
-            "[WARN] batch_connectors.json has changed since last run.\n"
-            "       Use --no-resume to start fresh, or restore the original config."
+            "[INFO] batch_connectors.json has changed since last run.\n"
+            "       Preserving existing completed/failed state and processing new connectors."
         )
-        fail("Config hash mismatch. Cannot resume.")
+        state["configHash"] = config_hash(cfg)
+        save_state(state)
 
     print(f"[INFO] Resuming from saved state ({len(state.get('completed', []))} completed, "
           f"{len(state.get('failed', []))} failed)")

@@ -244,7 +244,7 @@ def main() -> None:
 
     # ── 1. Read artifacts ─────────────────────────────────────────────────────
     source_doc_path, doc_content = find_latest_doc(artifacts_dir)
-    connector_name, connector_slug, _ = extract_connector_info(doc_content)
+    connector_name, connector_slug, _ = extract_connector_info(doc_content, artifacts_dir)
     screenshot_files = find_screenshots(artifacts_dir)
 
     # ── 2. Validate docs repo ─────────────────────────────────────────────────
