@@ -85,7 +85,6 @@ CATEGORY_MAP: dict[str, str] = {
     # Messaging
     "kafka": "messaging",
     "rabbitmq": "messaging",
-    "mqtt": "messaging",
     "nats": "messaging",
     "activemq": "messaging",
     "ibmmq": "messaging", "ibm.ibmmq": "messaging",
@@ -167,11 +166,20 @@ CATEGORY_MAP: dict[str, str] = {
     # HRMS
     "hrms": "hrms",
     # Connectivity
-    "http": "connectivity",
-    "ftp": "connectivity",
     "sftp": "connectivity",
     "smtp": "connectivity",
     "imap": "connectivity",
+    # Built-in (Ballerina standard library connectors)
+    "email": "built-in",
+    "ftp": "built-in",
+    "graphql": "built-in",
+    "grpc": "built-in",
+    "http": "built-in",
+    "mqtt": "built-in",
+    "tcp": "built-in",
+    "udp": "built-in",
+    "websocket": "built-in",
+    "websub": "built-in",
     # Marketing & Social
     "hubspot.marketing.campaigns": "marketing-social",
     "hubspot.marketing.emails": "marketing-social",

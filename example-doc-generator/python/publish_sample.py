@@ -251,9 +251,13 @@ def commit_and_push(
         text=True,
         check=True,
     )
+    # Only flag already-staged index changes outside the target path.
+    # Untracked files (??) are irrelevant — git add -- <path> never touches them.
     unrelated = [
         line for line in status.stdout.splitlines()
-        if line[3:] and not line[3:].startswith(staged_path)
+        if line[:2] != "??" and line[3:] and not (
+            line[3:].startswith(staged_path) or staged_path.startswith(line[3:])
+        )
     ]
     if unrelated:
         raise RuntimeError(
