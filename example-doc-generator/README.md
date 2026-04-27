@@ -1,10 +1,15 @@
 # Example Doc Generator
 
-An AI-driven pipeline that automates WSO2 Integrator low-code connector documentation. It uses **Ballerina** to orchestrate prompt generation via the Claude API, then runs a **Python agent server** (Claude Agent SDK + Playwright MCP) that operates a **code-server** instance to capture screenshots and produce step-by-step workflow guides.
+An AI-driven pipeline that automates WSO2 Integrator low-code **trigger** documentation. It uses **Ballerina** to orchestrate prompt generation via the Claude API, then runs a **Python agent server** (Claude Agent SDK + Playwright MCP) that operates a **code-server** instance to capture screenshots and produce step-by-step trigger integration guides.
 
 ```
-Goal → Claude generates execution prompt → Agent executes via Playwright MCP → Artifacts (docs + screenshots)
+Trigger → Claude generates execution prompt → Agent executes via Playwright MCP → Artifacts (docs + screenshots)
 ```
+
+Supports all 15 WSO2 Integrator trigger types across three categories:
+- **Integration as API**: HTTP Service (`ballerina/http`), GraphQL Service (`ballerina/graphql`), TCP Service (`ballerina/tcp`)
+- **Event Integration**: Kafka, RabbitMQ, MQTT, Azure Service Bus, Salesforce, Twilio, GitHub, Solace, CDC for MSSQL, CDC for PostgreSQL
+- **File Integration**: FTP/SFTP (`ballerina/ftp`), Local Files (`ballerina/file`)
 
 ## Prerequisites
 
@@ -48,9 +53,13 @@ make setup
 **5. Run the pipeline**
 
 ```bash
-make run CONNECTOR=mysql
+make run TRIGGER=trigger.github PACKAGE=ballerinax/trigger.github
+# For ballerina/* org triggers:
+make run TRIGGER=http PACKAGE=ballerina/http
+# Package defaults to ballerinax/<name> if omitted:
+make run TRIGGER=kafka
 # or directly:
-bal run -- mysql
+bal run -- trigger.github ballerinax/trigger.github
 ```
 
 Artifacts are saved under `artifacts/` (git-ignored).
@@ -69,7 +78,7 @@ Copy `Config.toml.example` to get started.
 | `codeServerPort` | No | `8080` | Port for the code-server instance |
 | `agentServerPort` | No | `8765` | Port for the Python agent server |
 
-> **Connector name** is passed as a CLI argument, not a configurable: `make run CONNECTOR=mysql` or `bal run -- mysql`.
+> **Trigger name and package** are passed as CLI arguments: `make run TRIGGER=trigger.github PACKAGE=ballerinax/trigger.github` or `bal run -- trigger.github ballerinax/trigger.github`. Package defaults to `ballerinax/<name>` when omitted.
 
 > **Never commit `Config.toml`** — it is git-ignored.
 
@@ -136,15 +145,14 @@ Setup
   make setup-bal            Build the Ballerina project
 
 Run
-  make run CONNECTOR=mysql  Run the full pipeline for a connector
+  make run TRIGGER=trigger.github                        Run the full pipeline for a trigger
+  make run TRIGGER=http PACKAGE=ballerina/http           Run with explicit package path
   make start-agent          Start the Python agent server in the foreground
   make stop-agent           Send shutdown to the agent server
 
-Publish
+Publish (not yet wired for triggers)
   make publish-docs         Publish docs + create PR to docs-integrator
   make publish-docs-dry     Dry run — print planned actions, no changes
-  make cleanup              Publish integration sample PR + delete local project
-  make cleanup-dry          Dry run for cleanup
 
 Screenshots
   make crop-screenshots     Crop UI chrome from all screenshots
@@ -162,10 +170,10 @@ Run `make help` for the full list with configurable variables.
 | Phase | Steps | Description |
 |-------|-------|-------------|
 | Pre-flight | 1–2 | Validate API key; check Claude Code CLI is installed |
-| Infrastructure | 3–5 | Install/start code-server; install/start Python agent server |
-| Prompt generation | 6–10 | Build prompts → call Claude → generate slug → save execution prompt |
+| Infrastructure | 3–6 | Install/start code-server; install/start Python agent server |
+| Prompt generation | 7–10 | Build prompts → call Claude → format → save execution prompt |
 | Agent execution | 11 | POST prompt to agent server; stream logs until done |
-| Post-processing | 12–17 | Enforce doc structure; inject Devant button; append examples link; crop screenshots; write run log |
+| Post-processing | 12–14 | Enforce doc structure; crop screenshots; write run log |
 
 ## Python Agent Server
 

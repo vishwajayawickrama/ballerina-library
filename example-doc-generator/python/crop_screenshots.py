@@ -90,6 +90,18 @@ def main():
     pngs = sorted(SCREENSHOTS_DIR.glob("*.png"))
     # Exclude any backup files that may already exist
     pngs = [p for p in pngs if not p.name.endswith(".orig.png")]
+    # Exclude debug-* captures — agents are instructed to write exploratory
+    # screenshots to /tmp/, but if any leak in here, drop them rather than
+    # crop and archive them alongside the milestone screenshots.
+    debug_leaks = [p for p in pngs if p.name.startswith("debug-")]
+    if debug_leaks:
+        for p in debug_leaks:
+            try:
+                p.unlink()
+                print(f"[INFO] Removed leaked debug screenshot: {p.name}")
+            except OSError as e:
+                print(f"[WARN] Could not remove {p.name}: {e}")
+        pngs = [p for p in pngs if not p.name.startswith("debug-")]
 
     if not pngs:
         print(f"[INFO] No PNG files found in {SCREENSHOTS_DIR}.")

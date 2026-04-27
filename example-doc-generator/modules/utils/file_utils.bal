@@ -14,7 +14,9 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/file;
 import ballerina/io;
+import ballerina/os;
 import ballerina/time;
 
 public const OUTPUT_DIR = "./artifacts/execution-prompt";
@@ -34,11 +36,16 @@ public function saveExecutionPrompt(string content, string goalSlug) returns str
     time:Civil civil = time:utcToCivil(now);
     string timestamp = string `${civil.year}-${civil.month < 10 ? "0" : ""}${civil.month}-${civil.day < 10 ? "0" : ""}${civil.day}_${civil.hour < 10 ? "0" : ""}${civil.hour}-${civil.minute < 10 ? "0" : ""}${civil.minute}-${civil.second < 10d ? "0" : ""}${civil.second.toString()}`;
     string filename = string `${goalSlug}_execution_prompt_${timestamp}.md`;
-    string filePath = OUTPUT_DIR + "/" + filename;
+    string relPath = OUTPUT_DIR + "/" + filename;
 
     // Write the execution prompt to file
-    check io:fileWriteString(filePath, content);
-    return filePath;
+    check io:fileWriteString(relPath, content);
+
+    // Return an absolute path so the agent server can locate the file regardless
+    // of its own working directory.
+    string|error cwd = file:getCurrentDir();
+    string projectRoot = cwd is string ? cwd : os:getEnv("PWD");
+    return projectRoot + "/" + relPath.substring(2); // strip leading "./"
 }
 
 # Injects the "## Try it yourself" section (description, Deploy to Devant button,

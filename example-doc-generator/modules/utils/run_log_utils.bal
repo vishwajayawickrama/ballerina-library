@@ -47,10 +47,10 @@ public type AgentRunCost record {
 
 # All data needed to write a pipeline run log entry.
 public type RunLogEntry record {
-    # The connector name (exact Ballerina Central package name)
-    string connectorName;
-    # Filename-safe slug derived from the connector name
-    string connectorSlug;
+    # The trigger name (exact Ballerina Central package name)
+    string triggerName;
+    # Filename-safe slug derived from the trigger name
+    string triggerSlug;
     # Optional extra instructions passed to the agent (empty string if none)
     string additionalInstructions;
     # Pipeline start time
@@ -88,7 +88,7 @@ public function writeRunLog(RunLogEntry entry) {
 
     string timestamp = time:utcToString(entry.startTime);
     string tsSlug = re `[:\.]`.replaceAll(timestamp, "-");
-    string logPath = RUN_LOG_DIR + "/" + entry.connectorSlug + "_" + tsSlug + ".json";
+    string logPath = RUN_LOG_DIR + "/" + entry.triggerSlug + "_" + tsSlug + ".json";
 
     AgentRunCost? ac = entry.agentCost;
     json agentCostJson = ac is AgentRunCost ? {
@@ -101,8 +101,8 @@ public function writeRunLog(RunLogEntry entry) {
     } : "not available";
 
     json logJson = {
-        "connectorName":            entry.connectorName,
-        "connectorSlug":            entry.connectorSlug,
+        "triggerName":              entry.triggerName,
+        "triggerSlug":              entry.triggerSlug,
         "additionalInstructions":   entry.additionalInstructions == "" ? () : entry.additionalInstructions,
         "model":            "claude-sonnet-4-6",
         "startTime":        timestamp,

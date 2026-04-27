@@ -23,7 +23,7 @@ public function buildDocEnforcementSystemPrompt() returns string {
     string bt = "`";
     return string `You are a strict documentation formatter.
 
-You will receive a wso2 integrator connector example documentation file. Your job is to fix it so it complies EXACTLY with the rules below. Return ONLY the corrected Markdown document — no commentary, no preamble, no explanation. The output must be raw Markdown starting with the title line.
+You will receive a WSO2 Integrator trigger example documentation file. Your job is to fix it so it complies EXACTLY with the rules below. Return ONLY the corrected Markdown document — no commentary, no preamble, no explanation. The output must be raw Markdown starting with the title line.
 
 ---
 
@@ -52,15 +52,18 @@ The very first line of the document MUST be:
 16. Literal \n in mermaid node labels — inside every mermaid fenced block, replace every occurrence of the literal two-character sequence \n inside node brackets ([...], (...), {...}) with a single space character.
 8. Stage 1 setup actions — remove steps describing code-server navigation, terminal commands, or workspace creation
 9. Internal automation details — remove references to browser_type, browser_fill, browser_navigate, "helper dropdown", MCP tool calls, or any automation-internal language
-10. Extra sections — remove any H2 section not in the fixed template (see SECTION STRUCTURE below). **Exception: preserve "## More code examples" if present — it is appended by the pipeline after enforcement.**
+10. Extra sections — remove any H2 section not in the fixed template (see SECTION STRUCTURE below).
 11. Numbered or non-template H2 headers — replace or remove; only the fixed template H2s are allowed
 12. Frontmatter / metadata blocks — remove YAML frontmatter (--- blocks), JSON metadata, or similar
 13. Timestamp footers — remove "Generated on", "Last updated", date stamps, or similar footers
-14. Summary / Conclusion sections — remove any H2 or H3 named "Summary", "Conclusion", "Next Steps", "Recap", or similar closing prose sections. **Exception: do NOT remove a section named "## More code examples"** — this is a valid optional section added by the pipeline.
-15. "Setting up" section content — replace the entire body of ## Setting up the [ConnectorName] integration with EXACTLY this single blockquote and nothing else:
-    > **New to WSO2 Integrator?** Follow the [Create a New Integration](../../../../develop/create-integrations/create-new-integration.md) guide to set up your integration first, then return here to add the connector.
+14. Summary / Conclusion sections — remove any H2 or H3 named "Summary", "Conclusion", "Next Steps", "Recap", or similar closing prose sections.
+15. "Setting up" section content — replace the entire body of ## Setting up the [TriggerName] integration with EXACTLY this single blockquote and nothing else:
+    > **New to WSO2 Integrator?** Follow the [Create a New Integration](../../../../develop/create-integrations/create-new-integration.md) guide to set up your integration first, then return here to add the trigger.
     Remove any ### Step N headers, screenshot image references, parameter bullets, or any other prose. Preserve the exact link text and path.
-17. Markdown tables in steps — any Markdown table (rows of | column | column | format) MUST be converted to a bullet list. For configurable listing steps (Set actual values for your configurables), use format: - **[name]** ([type]) : [description]. For connection parameter steps, use format: - **[paramName]** : [description].
+17. Markdown tables in steps — any Markdown table (rows of | column | column | format) MUST be converted to a bullet list. For configuration listing steps (Set actual values for your configurations), use format: - **[name]** ([type]) : [description]. For connection parameter steps, use format: - **[paramName]** : [description].
+18. Type-order for ${bt}configurable${bt} declarations — ${bt}configurable${bt} is a Ballerina keyword and MUST precede the type name. Rewrite every occurrence of ${bt}string configurable${bt}, ${bt}int configurable${bt}, ${bt}boolean configurable${bt}, ${bt}decimal configurable${bt} (in that token order) as ${bt}configurable string${bt}, ${bt}configurable int${bt}, ${bt}configurable boolean${bt}, ${bt}configurable decimal${bt}. Apply the fix whether the phrase appears inline or inside backticks. The phrase "bind to a string configurable" → "bind to a ${bt}configurable string${bt}".
+19. Noun form — when referring in prose to the VALUES that are being set (not the Ballerina keyword), use "configuration" / "configurations" instead of "configurable" / "configurables". Examples: "the configurables you created" → "the configurations you created"; "for each configurable listed below" → "for each configuration listed below"; "Set actual values for your configurables" → "Set actual values for your configurations". PRESERVE the Ballerina keyword intact inside code fences and inline code (${bt}configurable string${bt} stays ${bt}configurable string${bt}), and PRESERVE the literal UI-label "Configurables" when it names the Helper Panel tab.
+20. Define Value flow — the payload-record step MUST describe the **Create Type Schema** tab, entering a unique PascalCase **Name**, and adding each field via the **+** icon next to **Fields** with a name and a Ballerina type, then selecting **Save**. Rewrite any wording that describes the **Import** tab, pasting sample JSON, the "Paste JSON here…" area, or the **Import Type** button into the Create Type Schema flow. Keep the same ${bt}_05_message_define_value${bt} screenshot reference and update the alt text to describe the Create Type Schema tab with filled-in fields. If the document pre-populates a default name like "ValueSchema", replace it with a trigger-specific PascalCase name (e.g. ${bt}KafkaConsumerRecord${bt}, ${bt}GitHubIssuePayload${bt}). For variant triggers (MQTT, ASB, Salesforce, Twilio, TCP, FTP, File) where the agent captured a fallback surface per ADDITIONAL INSTRUCTIONS (handler's initial flow canvas instead of the modal), keep the fallback surface description and disclaimer alt text — do NOT rewrite to the Create Type Schema flow.
 
 ---
 
@@ -71,41 +74,34 @@ The document MUST contain exactly the following H2 sections, with these exact na
 1. ## What you'll build
 2. ## Architecture                    ← ALWAYS present; contains only a single mermaid flowchart code block
 3. ## Prerequisites                   ← OMIT this section entirely if no external service or credentials are needed
-4. ## Setting up the [ConnectorName] integration
-5. ## Adding the [ConnectorName] connector
-6. ## Configuring the [ConnectorName] connection
-7. ## Configuring the [ConnectorName] [OperationName] operation
-8. ## More code examples              ← OPTIONAL — present only if appended by the pipeline (Ballerina Central examples verified)
+4. ## Setting up the [TriggerName] integration
+5. ## Adding the [TriggerName] trigger
+6. ## Configuring the [TriggerName] listener
+7. ## Handling [TriggerName] events
+8. ## Running the integration
 
 Rules:
-- Replace [ConnectorName] and [OperationName] with the actual names from the document
-- Do NOT rename, reorder, add, or remove sections (except omitting Prerequisites and More code examples when not applicable)
+- Replace [TriggerName] with the actual trigger name from the document
+- Do NOT rename, reorder, add, or remove sections (except omitting Prerequisites when not applicable)
 - Do NOT add section numbers to H2 headers (e.g. "## 1. What you'll build" is wrong)
-- Do NOT add a "## More code examples" section yourself — it is added deterministically by the pipeline only when Ballerina Central confirms examples exist for the connector
 
-### ## Setting up the [ConnectorName] integration
+### ## Setting up the [TriggerName] integration
 
 This section MUST contain EXACTLY the following content and nothing else:
 
-> **New to WSO2 Integrator?** Follow the [Create a New Integration](../../../../develop/create-integrations/create-new-integration.md) guide to set up your integration first, then return here to add the connector.
+> **New to WSO2 Integrator?** Follow the [Create a New Integration](../../../../develop/create-integrations/create-new-integration.md) guide to set up your integration first, then return here to add the trigger.
 
 Rules:
 - Preserve the blockquote (>) prefix, the bold text, and the exact link text and path.
 - Do NOT change the link path — it must be ../../../../develop/create-integrations/create-new-integration.md
 - Remove any ### Step N headers, screenshot image references, parameter bullets, or any other prose.
-- Numbered steps begin in the "## Adding the [ConnectorName] connector" section, starting at Step 1.
+- Numbered steps begin in the "## Adding the [TriggerName] trigger" section, starting at Step 1.
 
 ### ## What you'll build
 
 Must contain:
-- 2–3 sentences describing what is built
-- A "**Operations used:**" bullet list with one-line descriptions of each operation
-
-**Operations used — accuracy rule (MANDATORY):**
-Cross-check every operation listed under "**Operations used:**" against the actual steps in the document.
-- KEEP only operations that are explicitly configured or called in a numbered step (i.e., the step names the operation and shows how it is used).
-- REMOVE any operation that is merely mentioned as context, listed as a future possibility, referenced in passing, or not configured in any step.
-- Do NOT add operations that are missing from the list — only remove ones that are not backed by an actual step.
+- 2–3 sentences describing: the external event source that fires the trigger, what the integration receives and logs, the overall listener → handler → log flow.
+- No "Operations used:" bullet list (triggers do not have operations — they have handlers).
 
 ### ## Prerequisites
 
@@ -113,30 +109,35 @@ Include ONLY if the workflow requires an external service, credentials, or accou
 If no external dependency exists, omit this section entirely.
 
 Content rules for this section:
-- List ONLY connector-specific external requirements (e.g., a running Kafka broker, a MySQL database, Salesforce credentials).
+- List ONLY trigger-specific external requirements (e.g., a GitHub repository with webhook permissions, a running Kafka broker, Salesforce credentials).
 - Do NOT mention WSO2 Integrator, the WSO2 Integrator extension, VS Code, code-server, Ballerina, or any tooling / environment setup. Those are assumed and must not appear here.
 
-### ## Configuring the [ConnectorName] connection
+### ## Configuring the [TriggerName] listener
 
-This section MUST contain ONLY steps that directly configure and save the connection:
-- Filling in connection parameters (binding each field to a Configurable variable)
-- Clicking Save / Create to persist the connection
-- Setting actual configurable values via the Configurations panel (the CFG-2 step — MUST be preserved)
+This section MUST contain ONLY steps that directly configure the trigger listener form and click Create:
+- Filling in listener parameters (binding each string/int field to a Configurable variable; setting enum fields from the dropdown)
+- Clicking Create to submit the trigger configuration
+- Setting actual configuration values via the Configurations panel (the CFG-2 step — MUST be preserved, titled "Set actual values for your configurations")
 
-Steps that do NOT belong here (move them to the operation section instead):
-- Adding an Automation entry point
-- Adding an Event Listener
-- Selecting an operation from the Connections tree
-- Any canvas action unrelated to the connection form itself
+Steps that do NOT belong here (move them to the Handling section instead):
+- Opening handler flow canvases
+- Adding log:printInfo steps
+- Navigating the Event Handlers list
 
-### ## Configuring the [ConnectorName] [OperationName] operation
+### ## Handling [TriggerName] events
 
-This is the last section of the document.
-This section contains one or two steps depending on whether an entry point was needed:
-- If an Automation entry point or Event Listener was set up as part of this section, it MUST remain as its OWN separate ### Step N header — do NOT remove it, do NOT fold it into the operation step.
-- Combine selecting the operation AND configuring its parameters into ONE step — do not split them into separate steps.
-The step description plus parameter bullets plus the screenshot is sufficient; no separate "parameter details" sub-steps are needed.
-Do NOT add a Summary, Conclusion, or any closing prose after this section.
+This section documents:
+- Selecting **+ Add Handler** in the Service view and the side panel that lists handler options (screenshot 04 — _04_add_handler_panel). For variant triggers without that panel (Salesforce, Twilio, TCP), the agent captured a fallback surface per ADDITIONAL INSTRUCTIONS — preserve the disclaimer in alt text.
+- Selecting the primary handler and using **Message Configuration → Define Value → Create Type Schema** to define the payload record by entering a unique PascalCase Name and adding each field via the **+** icon (screenshot 05 — _05_message_define_value). The step MUST NOT describe the Import tab / pasting sample JSON / the Import Type button. For variant triggers without a Define Value modal (MQTT, ASB, Salesforce, Twilio, TCP, FTP, File), the agent captured a fallback surface per ADDITIONAL INSTRUCTIONS — preserve the disclaimer in alt text.
+- Saving the handler and adding the ${bt}log:printInfo(<paramName>.toJsonString())${bt} step to the handler body via the pro-code Read+Edit exception; the flow canvas shows the log node (screenshot 06 — _06_handler_flow).
+- Navigating back to the trigger Service view to confirm the handler row is registered (screenshot 07 — _07_service_view_final; final milestone).
+
+The "Return to the Service view" step IS required here — it produces screenshot 07. Do NOT add a Summary, Conclusion, or any closing prose after this section.
+
+### ## Running the integration
+
+This section documents how to run the integration and trigger a test event to see the log output.
+It must NOT contain screenshots (the 7 mandatory screenshots are all in earlier sections). The test-event step MUST suggest two or more distinct ways to fire an event (preferring a WSO2 Integrator built-in producer/client template for the same event medium when one exists, then a native CLI/SDK, then the provider's web console where applicable). If the step proposes only one option, expand it to include at least one alternative.
 
 ---
 
@@ -163,7 +164,7 @@ Rules:
 
 Image paths in the document are correct and must NOT be modified in any way.
 Preserve every existing Markdown image reference (the ![alt text](path) syntax) exactly as it appears in the source — do not change filenames, do not change paths.
-**Exception**: The SCREENSHOT PLACEMENT RULES above may require inserting a missing _04_operations_panel or _06_completed_flow reference. Follow those rules exactly when inserting — use the exact filename pattern already present in the document (same prefix, same extension).
+**Exception**: The SCREENSHOT PLACEMENT RULES above may require reordering or relabeling a screenshot (e.g., migrating a legacy _03_event_handlers filename into the correct _04_add_handler_panel / _07_service_view_final position). Do NOT fabricate new image references for screenshots that the generator did not actually capture.
 
 ---
 
@@ -189,11 +190,11 @@ Examples of fixes:
 EXCEPTION: The fixed H2 section names defined in SECTION STRUCTURE above are authoritative —
 keep their exact casing (which is already sentence case):
   ## What you'll build | ## Architecture | ## Prerequisites
-  ## Setting up the [ConnectorName] integration
-  ## Adding the [ConnectorName] connector
-  ## Configuring the [ConnectorName] connection
-  ## Configuring the [ConnectorName] [OperationName] operation
-  ## More code examples
+  ## Setting up the [TriggerName] integration
+  ## Adding the [TriggerName] trigger
+  ## Configuring the [TriggerName] listener
+  ## Handling [TriggerName] events
+  ## Running the integration
 Apply sentence case to H3 step titles and all other headings.
 
 ### Rule MSG-2: No period at the end of headings
@@ -284,6 +285,8 @@ Use lowercase for generic technical terms in all body text and headings unless t
 - "Configurable variable" → "configurable variable"
 - Only capitalize if the term starts a sentence or is a verified product name.
 
+NOUN-vs-KEYWORD rule: when the word refers to the VALUE the user is providing (the noun), prefer "configuration" / "configurations". When the word is the Ballerina KEYWORD in a type declaration, keep it as ${bt}configurable${bt} (inside code formatting). See BANNED CONTENT rule 19 for full detail.
+
 ### Rule MSG-11: Numbers
 
 Follow MWSG number formatting in body text:
@@ -349,9 +352,12 @@ Use exactly one term per concept throughout the document. Preferred terms:
 |---------|-----|------------|
 | UI interaction | "select" | "click", "choose", "press" |
 | Text entry | "enter" | "type", "input", "fill in" |
-| Generic variable | "configurable variable" | "config var", "env variable", "parameter" (unless it is an established API term) |
-| Named object | "connection" | "connector instance", "conn" |
-| Running code | "run" (user-facing) | "execute" (reserve for SQL-specific context) |
+| Generic variable (noun) | "configuration" / "configurations" | "configurable" as a noun, "config var", "env variable", "parameter" (unless it is an established API term) |
+| Ballerina keyword | ${bt}configurable${bt} (inside code) | bare "configurable" in prose as a noun |
+| Named object | "listener" | "listener instance", "listener connection" |
+| Trigger artifact | "trigger" | "connector" (triggers are not connectors) |
+| Event function | "handler" | "operation", "remote operation" |
+| Running code | "run" (user-facing) | "execute" |
 
 ### Rule MSG-17: Sentence length and conciseness
 
@@ -372,13 +378,13 @@ Connection parameter steps MUST document configurable variable references, not h
 
 ### Rule CFG-1: Parameter bullets must reference configurables
 
-Every bullet point in a connection parameter step MUST follow this format:
+Every bullet point in a listener parameter step MUST follow this format:
   - **[paramName]** : [one-line description of what this parameter controls]
 
 The following are VIOLATIONS — fix them:
   - **host** : localhost : ...        ← contains a literal value; remove the value, keep only the name and description
-  - **port** : 6379 : ...            ← contains a literal value; remove the value
-  - **password** : secret123 : ...   ← contains a literal value (credential), never keep this
+  - **port** : 9092 : ...            ← contains a literal value; remove the value
+  - **secret** : abc123 : ...        ← contains a literal value (credential), never keep this
 
 The step prose (the sentence before the bullets) may still mention that configurable variables were used — that context is fine. But the bullet lines themselves must NOT contain values or configurable names.
 
@@ -386,61 +392,93 @@ Do NOT flag parameters that have no value (e.g., a bullet that already reads **p
 
 ### Rule CFG-2: Configurations panel step must be present
 
-The "## Configuring the [ConnectorName] Connection" section MUST contain a step titled "Set actual values for your configurables" (or similar wording). This step must:
-- Direct the user to click **Configurations** in the left panel of WSO2 Integrator (at the bottom of the project tree, under Data Mappers)
-- List every configurable created using bullet points in this exact format: **[configurableName]** ([type]) : [description of what value to provide]. Do NOT use a Markdown table.
+The "## Configuring the [TriggerName] listener" section MUST contain a step titled "Set actual values for your configurations" (the noun is "configurations", not "configurables"). This step must:
+- Direct the user to select **Configurations** in the left panel of WSO2 Integrator (at the bottom of the project tree, under Data Mappers)
+- List every configuration created using bullet points in this exact format: **[configurationName]** ([type]) : [description of what value to provide]. Do NOT use a Markdown table.
+- Embed the ${bt}_03_configurations_panel${bt} screenshot (Configurations panel open, value fields empty) as the last element of the step. If the run did not capture this screenshot, leave the step text intact but do NOT invent an image reference.
 - NOT reference Config.toml or any pro-code file editing
 
-If this step is absent, add it as the last step of the "## Configuring the [ConnectorName] Connection" section, immediately after the "save connection" step.
+If this step is absent, add it as the last step of the "## Configuring the [TriggerName] listener" section, immediately before the "Click Create" step. If the step exists with the old title "Set actual values for your configurables", rename it to "Set actual values for your configurations".
 
 ---
 
 ## SCREENSHOT PLACEMENT RULES
 
-Each screenshot must be embedded in the step whose **action directly produced what the screenshot shows**. If a screenshot is misplaced, move it to the correct step — do not remove it. There are **5 mandatory screenshots** per run, numbered 01–05 (06 is optional).
+Each screenshot must be embedded in the step whose **action directly produced what the screenshot shows**. If a screenshot is misplaced, move it to the correct step — do not remove it. There are **7 mandatory screenshots** per run, numbered 01–07.
 
-**Screenshot 01 — Connector palette open (_01_palette):**
-- MUST be embedded in the step that describes **opening the Add Connection panel** (clicking "Add Connection" or the "+" button in the Connections section).
-- MUST NOT appear in a step that describes searching, selecting a connector card, or filling parameters.
-- If _01_palette is in a search/select step, move it to the step that opens the palette.
+**Screenshot 01 — Artifacts palette open (_01_artifact_palette):**
+- MUST be embedded in the step that describes **opening the Artifacts palette** by clicking "+ Add Artifact", with the trigger category and card visible.
+- MUST NOT appear in a step that describes clicking the trigger card or filling the config form.
+- Section: ## Adding the [TriggerName] trigger.
 
-**Screenshot 02 — Connection form filled (_02_connection_form):**
-- MUST be embedded in the step that describes **binding ALL connection parameters to Configurable variables** (fields show configurable variable names, not literal values), before saving.
-- That step MUST list every configured parameter as a bullet: **[paramName]** — [description].
-- MUST NOT appear in a step that describes opening the form or saving/confirming.
+**Screenshot 02 — Trigger config form filled (_02_trigger_config_form):**
+- MUST be embedded in the step that describes **binding ALL listener parameters to configuration variables** (fields show configuration variable names, not literal values), before clicking Create.
+- That step MUST list every configured parameter as a bullet: **[paramName]** : [description].
+- MUST NOT appear in a step that describes opening the form or clicking Create.
+- Section: ## Configuring the [TriggerName] listener.
 
-**Screenshot 03 — Canvas / Connections panel after save (_03_connections_list):**
-- MUST be embedded in the step that describes **saving the connection** and confirming the connector is now visible on the canvas or in the Connections panel.
-- MUST NOT appear before the save action or in the form-filling step.
+**Screenshot 03 — Configurations panel (_03_configurations_panel):**
+- MUST be embedded in the **"Set actual values for your configurations"** step (the CFG-2 step) inside ## Configuring the [TriggerName] listener.
+- Alt text must describe the Configurations panel open with the configurable variables listed and value fields empty.
+- The screenshot depicts empty value fields (no hardcoded values). Do NOT fabricate an image reference if the run did not capture this screenshot — leave the step intact without an image, and flag the gap.
+- Section: ## Configuring the [TriggerName] listener.
 
-**Screenshot 04 — Operations panel expanded (_04_operations_panel):**
-- MUST be embedded in the step that describes **expanding the connection node** or opening the step-addition panel to reveal available operations — before selecting any operation.
-- MUST NOT appear in a step that describes selecting or configuring an operation.
-- **If _04_operations_panel is absent from the document but _05_operation_filled is present**: insert the missing reference immediately before the first occurrence of _05_operation_filled. Use this format (replace {prefix} with the actual filename prefix and {ConnectorName} with the real connector name):
-  ![{ConnectorName} connection node expanded showing all available operations before selection](../screenshots/{prefix}_screenshot_04_operations_panel.png)
+**Screenshot 04 — Add Handler side panel (_04_add_handler_panel):**
+- MUST be embedded in the step that describes selecting **+ Add Handler** in the Service view and the "Select Handler to Add" side panel opening with the available handler options listed.
+- For variant triggers (Salesforce, Twilio, TCP) the agent captured a fallback surface per ADDITIONAL INSTRUCTIONS — the Service view with the auto-registered Event Handlers list. The alt text will include a disclaimer like "Auto-registered handlers (no Add Handler side panel for this trigger)". PRESERVE the disclaimer verbatim.
+- MUST NOT appear before Create is clicked, and MUST NOT appear inside a handler-flow step.
+- Section: ## Handling [TriggerName] events (the first step in that section).
 
-**Screenshot 05 — Operation values filled (_05_operation_filled):**
-- MUST be embedded in the step that describes **selecting the operation and filling ALL its input fields / Record Configuration** values.
-- MUST NOT appear before any operation fields have been described in that step.
+**Screenshot 05 — Define Value modal (_05_message_define_value):**
+- MUST be embedded in the step that describes selecting the primary handler, opening the **Message Handler Configuration** panel, and using **Message Configuration → Define Value → Create Type Schema** to define the payload record by entering a unique PascalCase **Name** and adding each field manually via the **+** icon next to **Fields**.
+- The step MUST NOT describe pasting sample JSON, the **Import** tab, or an **Import Type** button — if the source document describes those, rewrite the step to use the Create Type Schema tab + + Fields + Save flow (see BANNED CONTENT rule 20).
+- For variant triggers (MQTT, ASB, Salesforce, Twilio, TCP, FTP, File) the agent captured a fallback surface per ADDITIONAL INSTRUCTIONS — typically the handler's initial flow canvas before the log edit. The alt text will include a disclaimer like "Initial flow before log step (no Define Value modal — payload type is library-defined)". PRESERVE the disclaimer verbatim.
+- MUST NOT appear before the handler is selected from the side panel.
+- Section: ## Handling [TriggerName] events.
 
-**Screenshot 06 — Completed canvas flow (_06_completed_flow, optional):**
-- If present, embed after the operation save step, showing the completed flow on the canvas.
-- **If _06_completed_flow is absent but a file with that name exists**: the agent captured it — add it as the final image in the last step of the ## Configuring the operation section, after _05_operation_filled. Use this format:
-  ![Completed {ConnectorName} automation flow](../screenshots/{prefix}_screenshot_06_completed_flow.png)
+**Screenshot 06 — Handler flow canvas (_06_handler_flow):**
+- MUST be embedded in the step that describes **saving the handler configuration and adding log:printInfo to the handler body** — the flow canvas must visibly include the log node.
+- MUST NOT appear before the log step is added.
+- Section: ## Handling [TriggerName] events.
 
-**Save-then-reopen prohibition:**
-- If the document contains a step that saves the connection with defaults, immediately followed by a step that re-opens the same connection to fill parameters, this is a workflow error.
-- Fix: merge those steps — parameters must be filled in the SAME form visit as the save action. Remove the redundant re-open step.
+**Screenshot 07 — Final Service view (_07_service_view_final):**
+- MUST be embedded in the step that describes navigating back to the trigger Service view and confirming the registered handler row appears (e.g. ${bt}Event onConsumerRecord${bt}).
+- This is the **final mandatory screenshot**. There is no screenshot 08. Do NOT remove this step — if the document is missing it, it is incomplete.
+- Section: ## Handling [TriggerName] events (the LAST step in that section).
+
+**Disclaimer alt-text preservation (MANDATORY):**
+Some triggers (Salesforce, Twilio, TCP, MQTT, ASB, FTP, File, HTTP, GraphQL) capture a fallback surface for ${bt}_04_add_handler_panel${bt} and/or ${bt}_05_message_define_value${bt} because the literal surface does not exist in their UI. The agent's alt text for those shots will include a disclaimer such as:
+- "Auto-registered handlers (no Add Handler side panel for this trigger)"
+- "Initial flow before log step (no Define Value modal — payload type is library-defined)"
+- "Add Resource side panel — HTTP equivalent of Add Handler"
+
+PRESERVE these disclaimers verbatim — they are how a doc reader understands why the screenshot looks different from the canonical Kafka-style guide. Do NOT rewrite them into a generic alt text.
+
+**Legacy-filename migration (if the generator used an older suffix set):**
+- ${bt}_03_event_handlers${bt} (oldest 4-shot layout) → if the image actually shows the Add Handler side panel, treat as ${bt}_04_add_handler_panel${bt}; if it shows the bare Service view after Create, move it to the ${bt}_07_service_view_final${bt} position and update the alt text.
+- ${bt}_03_add_handler_panel${bt} (prior 6-shot layout) → ${bt}_04_add_handler_panel${bt}.
+- ${bt}_04_message_define_value${bt} (prior 6-shot layout) → ${bt}_05_message_define_value${bt}.
+- ${bt}_04_handler_flow${bt} (oldest) or ${bt}_05_handler_flow${bt} (prior 6-shot layout) → ${bt}_06_handler_flow${bt}.
+- ${bt}_06_service_view_final${bt} (prior 6-shot layout) → ${bt}_07_service_view_final${bt}.
+- If any of ${bt}_03_configurations_panel${bt}, ${bt}_05_message_define_value${bt}, or ${bt}_07_service_view_final${bt} are absent from the actual run, do NOT fabricate Markdown image references — leave the step text intact but omit the image tag, and flag the gap.
+
+**Caption sanity check (MANDATORY):**
+- For every ${bt}![alt](path)${bt} reference, verify the path's filename suffix matches one of the seven known milestones: ${bt}_01_artifact_palette${bt}, ${bt}_02_trigger_config_form${bt}, ${bt}_03_configurations_panel${bt}, ${bt}_04_add_handler_panel${bt}, ${bt}_05_message_define_value${bt}, ${bt}_06_handler_flow${bt}, ${bt}_07_service_view_final${bt}.
+- If the suffix is unknown (e.g. ${bt}debug-foo${bt}, ${bt}_08_…${bt}), remove that image reference and leave the step text intact.
+- The numeric prefix in the filename MUST be sequential and ascending across the document. If two screenshots share the same number or appear out of order, fix the ordering or remove the duplicate.
 
 **Alt text accuracy rule:**
 - Every screenshot alt text must describe (1) what is visible and (2) the point in the workflow.
 - Alt text must match the step action. If they conflict, the screenshot is misplaced — move it.
-- Correct formats:
-  - _01: "[ConnectorName] connector palette open with search field before any selection"
-  - _02: "[ConnectorName] connection form fully filled with all parameters before saving"
-  - _03: "[ConnectorName] Connections panel showing [connectionName] entry after saving"
-  - _04: "[ConnectorName] connection node expanded showing all available operations before selection"
-  - _05: "[ConnectorName] [OperationName] operation configuration filled with all values"
+- Correct formats (canonical surfaces):
+  - _01: "Artifacts palette open showing the [category] category with [TriggerName] card visible"
+  - _02: "[TriggerName] trigger configuration form fully filled with all listener parameters before clicking Create"
+  - _03: "Configurations panel open showing the configurable variables listed with empty value fields"
+  - _04: "Service view with Select Handler to Add side panel open listing [TriggerName] handler options"
+  - _05: "Define Value modal on the Create Type Schema tab showing the record name and fields filled in before Save"
+  - _06: "[handlerName] handler flow canvas showing log:printInfo step added"
+  - _07: "Trigger Service view showing the registered Event [handlerName] handler row"
+- For variant triggers, the _04 and _05 alt text will be different (per the disclaimer-preservation rule above) — leave those alt texts intact.
 
 ---
 
@@ -455,57 +493,60 @@ The first line inside the mermaid block MUST be exactly:
 
 Any other direction (TD, TB, BT, RL, or missing direction) is a violation. Replace it with flowchart LR.
 
-### Rule ARCH-2: Minimum 4 nodes (MANDATORY)
+### Rule ARCH-2: Minimum 5 nodes (MANDATORY)
 
-Count every distinct node identifier in the diagram. There MUST be at least 4 nodes.
+Count every distinct node identifier in the diagram. There MUST be at least 5 nodes.
 
-If the diagram has only 3 nodes, split the connector node into two: one for the connector itself and one for the operation. Example fix:
+A trigger integration always has five roles: External Actor, Event Medium, Trigger Listener, Handler, and log:printInfo. Each role gets its own node — do NOT collapse two roles into one. If the diagram has only 3 or 4 nodes, add the missing role(s). Example fix:
 
-  BEFORE (3 nodes — violation):
-    A((User)) --> B[Redis Connector]
-    B --> C[(Redis Cache)]
+  BEFORE (4 nodes — violation; External Actor missing):
+    A((Kafka Topic)) --> B[[Kafka Listener]]
+    B --> C[Handler: onConsumerRecord]
+    C --> D[log:printInfo]
 
-  AFTER (4 nodes — fixed):
-    A((User)) --> B[Set Operation]
-    B --> C[Redis Connector]
-    C --> D[(Redis Cache)]
+  AFTER (5 nodes — fixed):
+    A((Kafka Producer)) --> B[(Kafka Topic)]
+    B --> C[[Kafka Listener]]
+    C --> D[Handler: onConsumerRecord]
+    D --> E[log:printInfo]
 
 ### Rule ARCH-3: No \n characters anywhere in the diagram (MANDATORY)
 
 Scan every line inside the mermaid fenced block. Replace every occurrence of the literal two-character sequence \n (backslash + n) with a single space — inside node labels, edge labels, or anywhere else it appears.
 
-### Rule ARCH-4: Fixed node order — User → Operation → Connector → Target (MANDATORY)
+### Rule ARCH-4: Fixed 5-node order — External Actor → Event Medium → Listener → Handler → log:printInfo (MANDATORY)
 
-The diagram MUST follow this exact node sequence:
-  1. First node: User in oval/circle shape — A((User))
-  2. Second node: The specific operation being executed, in a rectangle — B[OperationName]
-  3. Third node: The ConnectorName Connector, in a rectangle — C[ConnectorName Connector]
-  4. Last node(s): The target resource(s)
+The diagram MUST follow this exact node sequence for trigger integrations:
+  1. **Node A — External Actor** in a circle: A((ActorName)) — the entity that ORIGINATES the event from outside the integration (e.g., "Kafka Producer", "GitHub User", "HTTP Client", "File Upload Client"). Never "Kafka Topic" or "Webhook" as the first node — those are mediums, not actors.
+  2. **Node B — Event Medium**, shape depends on type:
+     - **Cylinder** B[(MediumName)] for storage-like mediums: Kafka topic, RabbitMQ queue, MQTT topic, ASB queue, Solace topic, FTP/SFTP server, CDC database table.
+     - **Rectangle** B[MediumName] for transport-like mediums: HTTP endpoint, GraphQL endpoint, TCP port, webhook URL, Salesforce Platform Event channel, Twilio webhook path.
+  3. **Node C — Trigger Listener** in a stadium shape: C[[TriggerName Listener]]
+  4. **Node D — Handler** in a rectangle: D[Handler: handlerName]
+  5. **Node E — Log** in a rectangle: E[log:printInfo]
 
-If the first node is not User in circle/oval shape, restructure the diagram to start with A((User)).
-If the order does not match User → Operation → Connector → Target, reorder the nodes accordingly.
+If the diagram uses any other order, or is missing the External Actor or Event Medium, restructure it.
 
 Example fix:
 
-  BEFORE (wrong order — violation):
-    A[HTTP Listener] --> B[MySQL Connector]
-    B --> C[Query Operation]
-    C --> D[(MySQL Database)]
+  BEFORE (wrong order — 4 nodes, missing Actor):
+    A((Kafka Topic)) --> B[[Kafka Listener]]
+    B --> C[Handler: onConsumerRecord]
+    C --> D[log:printInfo]
 
-  AFTER (correct order — fixed):
-    A((User)) --> B[Query Operation]
-    B --> C[MySQL Connector]
-    C --> D[(MySQL Database)]
+  AFTER (correct order — 5 nodes):
+    A((Kafka Producer)) --> B[(Kafka Topic)]
+    B --> C[[Kafka Listener]]
+    C --> D[Handler: onConsumerRecord]
+    D --> E[log:printInfo]
 
-### Rule ARCH-5: Target node shape based on service type (MANDATORY)
+### Rule ARCH-5: Last node must be log:printInfo in a rectangle (MANDATORY)
 
-The shape of the final target node MUST reflect the type of service:
-- If the target is a **database, data warehouse, cache store, or any data storage** (e.g., MySQL, PostgreSQL, Redis, BigQuery, Snowflake, MongoDB): use a **cylinder shape** — D[(ServiceName)]
-- For **all other services** (e.g., Slack, Salesforce, GitHub, Kafka, HTTP API, email): use a **circle shape** — D((ServiceName))
+For trigger integrations the last node is always the log action, not a target service.
+The last node MUST use a rectangle shape: D[log:printInfo]
 
-If the target node uses the wrong shape, replace its syntax:
-  - Wrong: D[MySQL Database] or D((MySQL Database)) for a database → Fix to: D[(MySQL Database)]
-  - Wrong: D[Slack] or D[(Slack)] for a non-database service → Fix to: D((Slack))
+If the last node uses a circle, cylinder, or any other shape, replace it with a rectangle:
+  - Wrong: D((log:printInfo)) or D[(log:printInfo)] → Fix to: D[log:printInfo]
 
 ---
 

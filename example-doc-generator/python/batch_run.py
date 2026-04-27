@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Queue orchestrator for batch connector documentation generation.
+"""Queue orchestrator for batch trigger documentation generation.
 
-Reads a connector list from a JSON config file, runs the existing
-single-connector pipeline sequentially for each, archives artifacts
-per connector, and prints a summary with commit instructions.
+Reads a trigger list from a JSON config file, runs the existing
+single-trigger pipeline sequentially for each, archives artifacts
+per trigger, and prints a summary with commit instructions.
 
 Usage:
-    python batch_run.py --config batch_connectors.json
+    python batch_run.py --config batch_triggers.json
     python batch_run.py --dry-run
     python batch_run.py --no-resume          # ignore saved state, start fresh
-    python batch_run.py --create-prs         # create PRs after all connectors done
-    python batch_run.py --timeout 5400       # 90 min per connector
+    python batch_run.py --create-prs         # create PRs after all triggers done
+    python batch_run.py --timeout 5400       # 90 min per trigger
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ ROOT = Path(__file__).resolve().parent.parent  # project root
 ARTIFACTS_DIR = ROOT / "artifacts"
 ARCHIVE_DIR = ROOT / "artifacts_archive"
 STATE_FILE = ROOT / "batch_state.json"
-DEFAULT_CONFIG = ROOT / "batch_connectors.json"
+DEFAULT_CONFIG = ROOT / "batch_triggers.json"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -47,16 +47,26 @@ def fail(msg: str) -> None:
 
 
 def slugify(name: str) -> str:
-    """Mirror the Ballerina slug derivation in main.bal (lines 133-135)."""
+    """Mirror the Ballerina slug derivation in main.bal.
+
+    Strips a leading "trigger." prefix and any other dots so that org-qualified
+    package names produce dotless, filesystem-friendly slugs that match the
+    integration name the WSO2 Integrator UI accepts:
+        "trigger.github" → "github"
+        "trigger.twilio" → "twilio"
+        "kafka"          → "kafka"
+    """
     s = name.strip().lower()
     s = re.sub(r"\s+", "-", s)
     s = re.sub(r"[^a-z0-9\-.]", "", s)
+    s = re.sub(r"^trigger\.", "", s)
+    s = s.replace(".", "")
     return s
 
 
 def config_hash(config: dict) -> str:
-    """SHA-256 of the connectors list for change detection."""
-    payload = json.dumps(config["connectors"], sort_keys=True)
+    """SHA-256 of the triggers list for change detection."""
+    payload = json.dumps(config["triggers"], sort_keys=True)
     return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
 
@@ -72,22 +82,22 @@ def load_config(path: Path) -> dict:
     if not path.exists():
         fail(
             f"Config not found: {path}\n"
-            f"Copy batch_connectors.json.example to {path.name} and fill it in."
+            f"Copy batch_triggers.json.example to {path.name} and fill it in."
         )
     with open(path) as f:
         data = json.load(f)
 
-    if "connectors" not in data or not isinstance(data["connectors"], list):
-        fail(f"Config must have a 'connectors' array.")
-    if not data["connectors"]:
-        fail("Connector list is empty.")
+    if "triggers" not in data or not isinstance(data["triggers"], list):
+        fail(f"Config must have a 'triggers' array.")
+    if not data["triggers"]:
+        fail("Trigger list is empty.")
 
-    for i, c in enumerate(data["connectors"]):
+    for i, c in enumerate(data["triggers"]):
         if not isinstance(c, dict) or "name" not in c:
-            fail(f"connectors[{i}] must be an object with a 'name' field.")
+            fail(f"triggers[{i}] must be an object with a 'name' field.")
 
-    data.setdefault("docsBranch", "docs/connector-docs")
-    data.setdefault("samplesBranch", "samples/connector-samples")
+    data.setdefault("docsBranch", "docs/trigger-docs")
+    data.setdefault("samplesBranch", "samples/trigger-samples")
     return data
 
 # ---------------------------------------------------------------------------
@@ -159,7 +169,7 @@ def parse_run_cost(slug: str) -> dict | None:
     if not run_log_dir.exists():
         return None
 
-    goal_slug = slug + "-connector-example"
+    goal_slug = slug + "-trigger-example"
     logs = sorted(run_log_dir.glob(f"{goal_slug}_*.json"), key=lambda p: p.stat().st_mtime)
     if not logs:
         return None
@@ -184,9 +194,11 @@ def read_created_project_path() -> str | None:
 # Pipeline execution
 # ---------------------------------------------------------------------------
 
-def run_pipeline(name: str, instructions: str, timeout: int) -> bool:
-    """Run `make run CONNECTOR=<name>` and return True on success."""
-    cmd = ["make", "run", f"CONNECTOR={name}"]
+def run_pipeline(name: str, package: str, instructions: str, timeout: int) -> bool:
+    """Run `make run TRIGGER=<name> [PACKAGE=<pkg>]` and return True on success."""
+    cmd = ["make", "run", f"TRIGGER={name}"]
+    if package:
+        cmd.append(f"PACKAGE={package}")
     if instructions:
         cmd.append(f"ADDITIONAL_INSTRUCTIONS={instructions}")
 
@@ -232,7 +244,7 @@ def print_summary(results: list[dict], config: dict) -> str:
     out("=" * 70)
     out("BATCH RUN SUMMARY")
     out("=" * 70)
-    out(f" {'#':>3}  {'Connector':<20} {'Status':<10} {'Duration':<12} {'Cost':<10}")
+    out(f" {'#':>3}  {'Trigger':<20} {'Status':<10} {'Duration':<12} {'Cost':<10}")
     out(f" {'---':>3}  {'--------------------':<20} {'----------':<10} {'------------':<12} {'----------':<10}")
 
     for i, r in enumerate(results, 1):
@@ -248,7 +260,7 @@ def print_summary(results: list[dict], config: dict) -> str:
             fail_count += 1
 
     out("-" * 70)
-    out(f"Total: {len(results)} connectors | {ok_count} OK | {fail_count} failed")
+    out(f"Total: {len(results)} triggers | {ok_count} OK | {fail_count} failed")
     out(f"Total cost: ${total_cost:.2f}  |  Total time: {fmt_duration(total_duration)}")
     out("=" * 70)
 
@@ -256,11 +268,11 @@ def print_summary(results: list[dict], config: dict) -> str:
     successful = [r for r in results if r["status"] == "OK"]
     if successful:
         out()
-        out("COMMIT INSTRUCTIONS (for approved connectors):")
+        out("COMMIT INSTRUCTIONS (for approved triggers):")
         out("-" * 70)
 
-        docs_branch = config.get("docsBranch", "docs/connector-docs")
-        samples_branch = config.get("samplesBranch", "samples/connector-samples")
+        docs_branch = config.get("docsBranch", "docs/trigger-docs")
+        samples_branch = config.get("samplesBranch", "samples/trigger-samples")
 
         for r in successful:
             slug = r["slug"]
@@ -273,7 +285,7 @@ def print_summary(results: list[dict], config: dict) -> str:
                 out(f"# (no created-project.txt found — check {archive_dir}/run-log/)")
             out()
 
-        out("# After reviewing and committing all approved connectors:")
+        out("# After reviewing and committing all approved triggers:")
         out(f"make batch-pr-docs BRANCH={docs_branch}")
         out(f"make batch-pr-samples BRANCH={samples_branch}")
         out("=" * 70)
@@ -286,7 +298,7 @@ def print_summary(results: list[dict], config: dict) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Queue multiple connectors for sequential pipeline execution."
+        description="Queue multiple triggers for sequential pipeline execution."
     )
     parser.add_argument(
         "--config",
@@ -314,11 +326,25 @@ def main() -> None:
         default=3600,
         help="Max seconds per connector pipeline (default: 3600)",
     )
+    parser.add_argument(
+        "--per-trigger-cost-cap",
+        type=float,
+        default=25.0,
+        help="Skip remaining triggers if a single trigger costs more than this (USD). "
+             "Set to 0 to disable. Default: 25.0",
+    )
+    parser.add_argument(
+        "--total-cost-cap",
+        type=float,
+        default=150.0,
+        help="Stop the batch if cumulative cost exceeds this (USD). "
+             "Set to 0 to disable. Default: 150.0",
+    )
     args = parser.parse_args()
 
     cfg_path = Path(args.config).resolve()
     config = load_config(cfg_path)
-    connectors = config["connectors"]
+    connectors = config["triggers"]
     state = load_state(config, cfg_path, args.no_resume)
 
     # Dry-run mode
@@ -328,17 +354,18 @@ def main() -> None:
         print("=" * 70)
         for i, c in enumerate(connectors, 1):
             name = c["name"]
+            pkg = c.get("package", f"ballerinax/{name}")
             slug = slugify(name)
             skip = name in state["completed"] or name in state["failed"]
             status = " (skip — already processed)" if skip else ""
             instr = f'  instructions: "{c["instructions"]}"' if c.get("instructions") else ""
-            print(f"  {i}. {name} → slug: {slug}{status}")
+            print(f"  {i}. {name} (package: {pkg}) → slug: {slug}{status}")
             if instr:
                 print(f"     {instr}")
         print(f"\nDocs branch:    {config['docsBranch']}")
         print(f"Samples branch: {config['samplesBranch']}")
-        print(f"Timeout:        {args.timeout}s per connector")
-        print(f"Total:          {len(connectors)} connectors")
+        print(f"Timeout:        {args.timeout}s per trigger")
+        print(f"Total:          {len(connectors)} triggers")
         return
 
     # Set up graceful Ctrl+C handling
@@ -353,11 +380,18 @@ def main() -> None:
 
     batch_start = time.time()
     total = len(connectors)
+    cumulative_cost = sum(
+        r.get("cost") or 0.0 for r in state.get("results", []) if r.get("status") == "OK"
+    )
 
     print("=" * 70)
-    print(f"BATCH RUN — {total} connectors queued")
+    print(f"BATCH RUN — {total} triggers queued")
     print(f"Docs branch:    {config['docsBranch']}")
     print(f"Samples branch: {config['samplesBranch']}")
+    if args.per_trigger_cost_cap > 0:
+        print(f"Per-trigger cost cap: ${args.per_trigger_cost_cap:.2f}")
+    if args.total_cost_cap > 0:
+        print(f"Total cost cap:       ${args.total_cost_cap:.2f}  (resumed cumulative: ${cumulative_cost:.2f})")
     print("=" * 70)
 
     for i, c in enumerate(connectors, 1):
@@ -366,6 +400,7 @@ def main() -> None:
             break
 
         name = c["name"]
+        pkg = c.get("package", f"ballerinax/{name}")
         slug = slugify(name)
         instructions = c.get("instructions", "")
 
@@ -378,7 +413,7 @@ def main() -> None:
             continue
 
         print(f"\n{'=' * 70}")
-        print(f"[{i}/{total}] Processing: {name}")
+        print(f"[{i}/{total}] Processing: {name} (package: {pkg})")
         if instructions:
             print(f"         Instructions: {instructions}")
         print("=" * 70)
@@ -390,7 +425,7 @@ def main() -> None:
         connector_start = time.time()
 
         # Run pipeline
-        success = run_pipeline(name, instructions, args.timeout)
+        success = run_pipeline(name, pkg, instructions, args.timeout)
         connector_duration = time.time() - connector_start
 
         # Parse cost data
@@ -426,6 +461,24 @@ def main() -> None:
 
         state["inProgress"] = None
         save_state(state)
+
+        # Cost-cap enforcement — stop the batch if a single trigger blew the budget,
+        # or if cumulative cost crossed the total cap. This protects the rest of the
+        # queue from being silently throttled when one bad run drains the quota.
+        if cost_usd is not None:
+            cumulative_cost += cost_usd
+            if args.per_trigger_cost_cap > 0 and cost_usd > args.per_trigger_cost_cap:
+                print(
+                    f"\n[ABORT] {name} cost ${cost_usd:.2f} exceeds per-trigger cap "
+                    f"${args.per_trigger_cost_cap:.2f}. Stopping batch to protect remaining quota."
+                )
+                interrupted = True
+            elif args.total_cost_cap > 0 and cumulative_cost > args.total_cost_cap:
+                print(
+                    f"\n[ABORT] Cumulative cost ${cumulative_cost:.2f} exceeds total cap "
+                    f"${args.total_cost_cap:.2f}. Stopping batch."
+                )
+                interrupted = True
 
     batch_duration = time.time() - batch_start
 
