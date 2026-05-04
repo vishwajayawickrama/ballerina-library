@@ -15,17 +15,15 @@
 // under the License.
 
 # Builds the user message containing only the dynamic/variable parts:
-# trigger name, trigger package, code-server URL, and absolute artifact paths. All rules, template
+# connector name, code-server URL, and absolute artifact paths. All rules, template
 # structure, and formatting instructions live in system_prompt.bal.
 #
-# + triggerName            - Exact Ballerina Central package name (e.g. "trigger.github", "kafka")
-# + triggerPackage         - Full Ballerina Central package path (e.g. "ballerinax/trigger.github", "ballerina/http")
+# + connectorName          - Exact Ballerina Central package name (e.g. "mysql", "kafka")
 # + codeServerUrl          - The URL where code-server is running
 # + projectRoot            - Absolute path to the project root directory
 # + additionalInstructions - Optional extra instructions for the agent (empty string if none)
 # + return - the user message string
-public function buildUserMessage(string triggerName, string triggerPackage, string codeServerUrl, string projectRoot, string additionalInstructions = "") returns string {
-    string bt = "`";
+public function buildUserMessage(string connectorName, string codeServerUrl, string projectRoot, string additionalInstructions = "") returns string {
     string screenshotsDir = projectRoot + "/artifacts/screenshots";
     string workflowDocsDir = projectRoot + "/artifacts/workflow-docs";
     string additionalInstructionsSection = additionalInstructions != "" ? string `
@@ -36,46 +34,19 @@ ${additionalInstructions}
     return string `Generate a highly detailed execution prompt for the following goal.
 
 THE MAIN GOAL (this must be the central focus of the ENTIRE execution prompt):
-Create a WSO2 Integrator integration using the ${triggerName} trigger
-(${triggerPackage} from Ballerina Central). The integration must:
-1. Open the Artifacts palette via "+ Add Artifact" and select the
-   ${triggerName} trigger from the appropriate category
-   (Integration as API / Event Integration / File Integration).
-2. Configure the trigger listener by binding each required string/int parameter
-   to a configuration variable (Ballerina ${bt}configurable string${bt} /
-   ${bt}configurable int${bt}) using the Helper Panel. Enum/dropdown fields
-   (e.g. Event Channel) should be set directly — no configuration needed.
-   Always use Ballerina declaration order in prose — "configurable string",
-   never "string configurable".
-3. After clicking Create, add the primary event handler from the Service view
-   via "+ Add Handler" → select handler → define the Message payload via
-   Message Configuration → Define Value → Create Type Schema: enter a unique
-   PascalCase record name, add each payload field with the + icon (name + type),
-   select Save on the modal, then Save the handler configuration. Do NOT use
-   the Import tab / paste JSON / Import Type path. Some triggers (Salesforce,
-   Twilio, TCP) pre-register handlers and have no "+ Add Handler" panel;
-   some (MQTT, ASB, Salesforce, Twilio, TCP, FTP, File) have library-defined
-   payload types and no Define Value modal — for those, the per-trigger
-   ADDITIONAL INSTRUCTIONS block tells the agent which alternate surface to
-   capture for screenshots 04 and 05. HTTP/GraphQL use "+ Add Resource" /
-   "+ Create Operations" instead.
-4. Add log:printInfo(<paramName>.toJsonString()) inside the handler body via the
-   pro-code exception (Read + Edit tools on the .bal file directly). The handler
-   parameter may be named payload, event, message, data, afterEntry, etc. — use
-   the actual parameter name from the source.
-5. Navigate back to the Service view so the registered handler row is visible.
-6. Document every step with screenshots at the 7 mandatory milestones:
-   _01_artifact_palette, _02_trigger_config_form, _03_configurations_panel,
-   _04_add_handler_panel, _05_message_define_value, _06_handler_flow,
-   _07_service_view_final. Screenshot 07 is the final milestone.
+Create a WSO2 Integrator workflow using the ${connectorName} connector (ballerinax/${connectorName} from Ballerina Central). The workflow must:
+1. Locate and add the ${connectorName} connector from the connector palette.
+2. Configure the connection by binding each required parameter to a Configurable variable.
+3. Add an entry point (Automation trigger or Event Listener as appropriate) and call the primary remote operation for this connector type.
+4. Document every step with screenshots at the mandatory milestones.
 ${additionalInstructionsSection}
 Make sure the goal above is clearly reflected in:
-- The prompt TITLE (name the trigger explicitly)
-- The OVERVIEW section (first sentence must state the trigger and event category)
-- The OBJECTIVES (list trigger-specific implementation objectives)
+- The prompt TITLE (name the connector explicitly)
+- The OVERVIEW section (first sentence must state the connector and operation)
+- The OBJECTIVES (list connector-specific implementation objectives)
 - The IMPLEMENTATION STAGES (Stage 5+ must break down this exact goal into detailed, actionable steps with specific UI element names, fields to fill, buttons to click)
-- The DELIVERABLES (filename should use the trigger name)
-- The SUCCESS CRITERIA (what does a successful ${triggerName} trigger integration look like?)
+- The DELIVERABLES (filename should use the connector name)
+- The SUCCESS CRITERIA (what does a successful ${connectorName} connector integration look like?)
 
 CODE-SERVER URL: ${codeServerUrl}
 (Use this exact URL in Stage 1 when navigating to the code-server instance)

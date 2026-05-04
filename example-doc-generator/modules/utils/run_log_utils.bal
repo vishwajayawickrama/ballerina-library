@@ -47,10 +47,16 @@ public type AgentRunCost record {
 
 # All data needed to write a pipeline run log entry.
 public type RunLogEntry record {
+    # Pipeline mode: "connector" or "trigger"
+    string mode;
+    # The connector name (exact Ballerina Central package name)
+    string? connectorName;
+    # Filename-safe slug derived from the connector name
+    string? connectorSlug;
     # The trigger name (exact Ballerina Central package name)
-    string triggerName;
+    string? triggerName;
     # Filename-safe slug derived from the trigger name
-    string triggerSlug;
+    string? triggerSlug;
     # Optional extra instructions passed to the agent (empty string if none)
     string additionalInstructions;
     # Pipeline start time
@@ -88,7 +94,10 @@ public function writeRunLog(RunLogEntry entry) {
 
     string timestamp = time:utcToString(entry.startTime);
     string tsSlug = re `[:\.]`.replaceAll(timestamp, "-");
-    string logPath = RUN_LOG_DIR + "/" + entry.triggerSlug + "_" + tsSlug + ".json";
+    string artifactSlug = entry.mode == "trigger" && entry.triggerSlug is string ?
+        <string>entry.triggerSlug :
+        entry.connectorSlug is string ? <string>entry.connectorSlug : "pipeline-run";
+    string logPath = RUN_LOG_DIR + "/" + artifactSlug + "_" + tsSlug + ".json";
 
     AgentRunCost? ac = entry.agentCost;
     json agentCostJson = ac is AgentRunCost ? {
@@ -101,6 +110,9 @@ public function writeRunLog(RunLogEntry entry) {
     } : "not available";
 
     json logJson = {
+        "mode":                     entry.mode,
+        "connectorName":            entry.connectorName,
+        "connectorSlug":            entry.connectorSlug,
         "triggerName":              entry.triggerName,
         "triggerSlug":              entry.triggerSlug,
         "additionalInstructions":   entry.additionalInstructions == "" ? () : entry.additionalInstructions,

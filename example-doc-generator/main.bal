@@ -31,24 +31,48 @@ import wso2/example_doc_generator.utils;
 # Phase 2  (Steps 3–6):  Infrastructure     — code-server, extension check, and Python agent server.
 # Phase 3  (Steps 7–10): Prompt generation  — build, call Claude, format, save.
 # Phase 4  (Steps 11–12): Agent execution   — run agent, enforce doc structure.
-# Phase 5  (Steps 13–15): Post-processing   — crop screenshots, write run log.
+# Phase 5  (Steps 13–16): Post-processing   — inject sections, crop screenshots, write run log.
 #
-# + triggerName            - exact Ballerina Central package name, e.g. "trigger.github", "kafka"
-# + triggerPackage         - full Ballerina Central package path, e.g. "ballerinax/trigger.github", "ballerina/http"
-#                            defaults to "ballerinax/<triggerName>" if not provided
-# + additionalInstructions - optional extra instructions for the agent (e.g. "Use SASL credentials for Kafka")
+# Default mode is connector generation:
+#   bal run -- mysql
+# Trigger mode is explicit:
+#   bal run -- -t trigger.github ballerinax/trigger.github
+#
+# + args - connector args by default, or trigger args after -t
 # + return                 - an error if any step fails
-public function main(string triggerName, string triggerPackage = "", string additionalInstructions = "") returns error? {
+public function main(string... args) returns error? {
     utils:log("=== WSO2 Integrator Documentation Pipeline ===");
     utils:log("");
 
-    // Resolve triggerPackage: default to ballerinax/<triggerName> if not provided
-    string resolvedPackage = triggerPackage != "" ? triggerPackage : ("ballerinax/" + triggerName);
+    if args.length() == 0 {
+        return error("Usage: bal run -- <connector-name> [additional-instructions]\n" +
+                     "Trigger mode: bal run -- -t <trigger-name> [trigger-package] [additional-instructions]");
+    }
+
+    boolean triggerMode = args[0] == "-t";
+    int firstValueIndex = triggerMode ? 1 : 0;
+    if args.length() <= firstValueIndex {
+        return error("Missing " + (triggerMode ? "trigger" : "connector") + " name.");
+    }
+
+    string targetName = args[firstValueIndex];
+    string resolvedPackage = "";
+    string additionalInstructions = "";
+    if triggerMode {
+        string triggerPackage = args.length() > firstValueIndex + 1 ? args[firstValueIndex + 1] : "";
+        resolvedPackage = triggerPackage != "" ? triggerPackage : ("ballerinax/" + targetName);
+        additionalInstructions = args.length() > firstValueIndex + 2 ? args[firstValueIndex + 2] : "";
+    } else {
+        additionalInstructions = args.length() > firstValueIndex + 1 ? args[firstValueIndex + 1] : "";
+    }
 
     time:Utc startTime = time:utcNow();
     utils:log("[INFO] Start time: " + time:utcToString(startTime));
-    utils:log("[INFO] Trigger: " + triggerName);
-    utils:log("[INFO] Package: " + resolvedPackage);
+    utils:log("[INFO] Mode: " + (triggerMode ? "trigger" : "connector"));
+    utils:log("[INFO] " + (triggerMode ? "Trigger" : "Connector") + ": " + targetName);
+    if triggerMode {
+        utils:log("[INFO] Package: " + resolvedPackage);
+    }
     if additionalInstructions != "" {
         utils:log("[INFO] Additional instructions: " + additionalInstructions);
     }
@@ -134,43 +158,44 @@ public function main(string triggerName, string triggerPackage = "", string addi
 
     // ── Phase 3: Prompt generation ──────────────────────────────────────────
 
-    // Derive trigger slug from trigger name — no LLM call needed.
-    // The WSO2 Integrator UI rejects dots in the integration name (and the
-    // resulting bash glob/find paths get awkward), so for any package whose
-    // name carries a "trigger." prefix or other dot, strip it for the
-    // sample/integration name and the archive slug. The full triggerName
-    // is still used in prose to refer to the package.
-    string triggerSlug = triggerName.trim().toLowerAscii();
-    triggerSlug = re `\s+`.replaceAll(triggerSlug, "-");
-    triggerSlug = re `[^a-z0-9\-\.]`.replaceAll(triggerSlug, "");
-    // sampleName: dotless, dashless name used in the integration name (e.g.
-    // "trigger.github" → "github", "trigger.twilio" → "twilio", "kafka" → "kafka").
-    string sampleName = re `^trigger\.`.replaceAll(triggerSlug, "");
-    sampleName = re `\.`.replaceAll(sampleName, "");
-    // Image filenames must use underscores (dots are not safe in screenshot prefixes).
-    string imgSlug = re `\.`.replaceAll(sampleName, "_");
-    string goalSlug = sampleName + "-trigger-example";
-    utils:log("[INFO] Trigger slug: " + goalSlug);
+    // Derive slug from connector/trigger name — no LLM call needed.
+    string nameSlug = targetName.trim().toLowerAscii();
+    nameSlug = re `\s+`.replaceAll(nameSlug, "-");
+    nameSlug = re `[^a-z0-9\-\.]`.replaceAll(nameSlug, "");
 
-    // Write trigger name to artifacts/run-log/ for downstream steps
+    // Trigger project names cannot contain dots; connector paths preserve them.
+    string sampleName = triggerMode ? re `^trigger\.`.replaceAll(nameSlug, "") : nameSlug;
+    if triggerMode {
+        sampleName = re `\.`.replaceAll(sampleName, "");
+    }
+    string imgSlug = re `\.`.replaceAll(sampleName, "_");
+    string goalSlug = sampleName + (triggerMode ? "-trigger-example" : "-connector-example");
+    utils:log("[INFO] " + (triggerMode ? "Trigger" : "Connector") + " slug: " + goalSlug);
+
+    // Write connector/trigger name to artifacts/run-log/ for downstream steps.
     string runLogDir = "./artifacts/run-log";
     file:Error? cnDirErr = file:createDir(runLogDir, file:RECURSIVE);
     if cnDirErr is file:Error {
         return error("Could not create run-log directory: " + cnDirErr.message());
     }
-    io:Error? cnWriteErr = io:fileWriteString(runLogDir + "/trigger-name.txt", triggerName.trim());
+    string nameFile = triggerMode ? "trigger-name.txt" : "connector-name.txt";
+    io:Error? cnWriteErr = io:fileWriteString(runLogDir + "/" + nameFile, targetName.trim());
     if cnWriteErr is io:Error {
-        return error("Could not write trigger-name.txt: " + cnWriteErr.message());
+        return error("Could not write " + nameFile + ": " + cnWriteErr.message());
     }
-    utils:log("\t[INFO] Trigger name saved to " + runLogDir + "/trigger-name.txt");
+    utils:log("\t[INFO] " + (triggerMode ? "Trigger" : "Connector") + " name saved to " + runLogDir + "/" + nameFile);
     utils:log("");
 
     // Step 7: Build system and user prompts
     utils:log("[STEP 7] Building system and user prompts...");
     string|error cwdResult = file:getCurrentDir();
     string projectRoot = cwdResult is string ? cwdResult : os:getEnv("PWD");
-    string systemPrompt = prompts:buildSystemPrompt(projectRoot, triggerName, resolvedPackage, imgSlug, sampleName);
-    string userMessage = prompts:buildUserMessage(triggerName, resolvedPackage, codeServerUrl, projectRoot, additionalInstructions);
+    string systemPrompt = triggerMode ?
+        prompts:buildTriggerSystemPrompt(projectRoot, targetName, resolvedPackage, imgSlug, sampleName) :
+        prompts:buildSystemPrompt(projectRoot, targetName, imgSlug);
+    string userMessage = triggerMode ?
+        prompts:buildTriggerUserMessage(targetName, resolvedPackage, codeServerUrl, projectRoot, additionalInstructions) :
+        prompts:buildUserMessage(targetName, codeServerUrl, projectRoot, additionalInstructions);
 
     // Step 8: Call Anthropic API to generate the execution prompt
     utils:log("[STEP 8] Calling Anthropic API to generate execution prompt...");
@@ -187,8 +212,8 @@ public function main(string triggerName, string triggerPackage = "", string addi
      Generated by: WSO2 Integrator Documentation Pipeline
      Agent: Playwright MCP (Browser Automation)
      Target: Code-Server — WSO2 Integrator (Low-Code)
-     Trigger: ${triggerName}
-     Package: ${resolvedPackage}
+     ${triggerMode ? "Trigger" : "Connector"}: ${targetName}
+     ${triggerMode ? "Package: " + resolvedPackage : ""}
      ============================================================ -->
 
 `;
@@ -275,16 +300,22 @@ public function main(string triggerName, string triggerPackage = "", string addi
     }
     utils:log("");
 
-    // Step 12.5: Append the "Try it yourself" section (Devant button + GitHub
+    // Step 13: Append the "Try it yourself" section (Devant button + GitHub
     // source link). Runs AFTER enforcement so the enforcement prompt's fixed
-    // 8-H2 section list does not strip the appended H2. The helper is idempotent
-    // and logs a warn if the doc path is missing; no extra guard needed here
-    // (Step 12 already errors out if enforcedDocPath wasn't set).
+    // section list does not strip the appended H2.
+    utils:log("[STEP 13] Injecting 'Try it yourself' section into workflow doc...");
     utils:injectTryItYourselfSection(enforcedDocPath);
     utils:log("");
 
-    // Step 13: Crop UI chrome from screenshots produced by the agent
-    utils:log("[STEP 13] Cropping screenshots...");
+    // Step 14: Connector docs also get a Ballerina Central examples link.
+    if !triggerMode {
+        utils:log("[STEP 14] Checking Ballerina Central for connector examples link...");
+        utils:appendExamplesSection(enforcedDocPath);
+        utils:log("");
+    }
+
+    // Step 15: Crop UI chrome from screenshots produced by the agent
+    utils:log("[STEP 15] Cropping screenshots...");
     os:Process|error cropProc = os:exec({
         value: "python/.venv/bin/python",
         arguments: ["python/crop_screenshots.py"]
@@ -323,11 +354,14 @@ public function main(string triggerName, string triggerPackage = "", string addi
     }
     decimal totalCombinedCostUsd = totalCostUsd + agentCostUsd;
 
-    // Step 14: Write run log to artifacts/run-log/
-    utils:log("[STEP 14] Writing run log...");
+    // Step 16: Write run log to artifacts/run-log/
+    utils:log("[STEP 16] Writing run log...");
     utils:writeRunLog({
-        triggerName:              triggerName,
-        triggerSlug:              goalSlug,
+        mode:                    triggerMode ? "trigger" : "connector",
+        connectorName:           triggerMode ? () : targetName,
+        connectorSlug:           triggerMode ? () : goalSlug,
+        triggerName:             triggerMode ? targetName : (),
+        triggerSlug:             triggerMode ? goalSlug : (),
         additionalInstructions:   additionalInstructions,
         startTime:           startTime,
         endTime:             endTime,

@@ -16,7 +16,7 @@
 # ── Default ──────────────────────────────────────────────────────────────────
 help:
 	@echo ""
-	@echo "Trigger Docs Automation — available targets"
+	@echo "Connector Docs Automation — available targets"
 	@echo ""
 	@echo "  Setup"
 	@echo "    make setup            Install all dependencies (Ballerina + Python)"
@@ -24,9 +24,10 @@ help:
 	@echo "    make setup-bal        Build the Ballerina project"
 	@echo ""
 	@echo "  Run"
-	@echo "    make run TRIGGER=trigger.github                                              Run the full pipeline for a trigger"
-	@echo "    make run TRIGGER=trigger.github PACKAGE=ballerinax/trigger.github            Run with explicit package path (use for ballerina/* org)"
-	@echo "    make run TRIGGER=http PACKAGE=ballerina/http ADDITIONAL_INSTRUCTIONS='...'  Run with per-trigger guidance"
+	@echo "    make run CONNECTOR=mysql                                                     Run the full pipeline for a connector"
+	@echo "    make run CONNECTOR=mysql ADDITIONAL_INSTRUCTIONS='...'                       Run with per-connector guidance"
+	@echo "    make run TRIGGER=trigger.github                                              Run the full pipeline for a trigger (-t)"
+	@echo "    make run TRIGGER=trigger.github PACKAGE=ballerinax/trigger.github            Run trigger mode with explicit package path"
 	@echo "    make start-agent      Start the Python agent server in the foreground"
 	@echo "    make stop-agent       Send shutdown request to the agent server"
 	@echo ""
@@ -47,39 +48,39 @@ help:
 	@echo "    make pr-preview-dry BRANCH=<branch>       Dry run"
 	@echo "    BRANCH=<name>                             Required: the remote branch name"
 	@echo ""
-	@echo "  Batch Docs (commit multiple triggers to one branch, then one PR)"
-	@echo "    make batch-commit-docs                   Commit current trigger artifacts (default branch: docs/trigger-docs)"
+	@echo "  Batch Docs (commit multiple connectors to one branch, then one PR)"
+	@echo "    make batch-commit-docs                   Commit current connector artifacts (default branch: docs/connector-docs)"
 	@echo "    make batch-commit-docs BRANCH=<branch>   Commit to a custom branch"
 	@echo "    make batch-commit-docs-dry               Dry run"
 	@echo "    make batch-pr-docs BRANCH=<branch>       Create one PR from the shared branch"
 	@echo "    make batch-pr-docs-dry BRANCH=<branch>   Dry run"
-	@echo "    BRANCH=<name>                             Optional for commit (default: docs/trigger-docs); required for PR"
-	@echo "    CATEGORY=<cat>                            Override auto-detected trigger category"
+	@echo "    BRANCH=<name>                             Optional for commit (default: docs/connector-docs); required for PR"
+	@echo "    CATEGORY=<cat>                            Override auto-detected connector category"
 	@echo "    ARTIFACTS_DIR=<path>                      Override artifacts directory"
 	@echo "    DOCS_FORK=<owner/repo>                    Override fork slug"
 	@echo "    BATCH_COMMIT_DOCS_ARGS=<flags>            Extra flags for batch_commit_docs.py"
 	@echo "    BATCH_PR_DOCS_ARGS=<flags>                Extra flags for batch_pr_docs.py"
-	@echo "    Workflow: run pipeline for each trigger → 'make batch-commit-docs' each time"
-	@echo "              → 'make batch-pr-docs BRANCH=...' once when all triggers are committed"
+	@echo "    Workflow: run pipeline for each connector → 'make batch-commit-docs' each time"
+	@echo "              → 'make batch-pr-docs BRANCH=...' once when all connectors are committed"
 	@echo ""
 	@echo "  Batch Samples (commit multiple samples to one branch, then one PR)"
-	@echo "    make batch-commit-sample                   Commit current sample (default branch: samples/trigger-samples)"
+	@echo "    make batch-commit-sample                   Commit current sample (default branch: samples/connector-samples)"
 	@echo "    make batch-commit-sample BRANCH=<branch>   Commit to a custom branch"
 	@echo "    make batch-commit-sample-dry               Dry run"
 	@echo "    make batch-pr-samples BRANCH=<branch>      Create one PR from the shared branch"
 	@echo "    make batch-pr-samples-dry BRANCH=<branch>  Dry run"
-	@echo "    BRANCH=<name>                               Optional for commit (default: samples/trigger-samples); required for PR"
+	@echo "    BRANCH=<name>                               Optional for commit (default: samples/connector-samples); required for PR"
 	@echo "    BATCH_COMMIT_SAMPLE_ARGS=<flags>            Extra flags for batch_commit_sample.py"
 	@echo "    BATCH_PR_SAMPLES_ARGS=<flags>               Extra flags for batch_pr_samples.py"
-	@echo "    Workflow: run pipeline for each trigger → 'make batch-commit-sample' each time"
+	@echo "    Workflow: run pipeline for each connector → 'make batch-commit-sample' each time"
 	@echo "              → 'make batch-pr-samples BRANCH=...' once when all samples are committed"
 	@echo ""
-	@echo "  Batch Run (queue multiple triggers sequentially)"
-	@echo "    make batch-run                    Run queue from batch_triggers.json"
+	@echo "  Batch Run (queue multiple connectors sequentially)"
+	@echo "    make batch-run                    Run queue from batch_connectors.json"
 	@echo "    make batch-run-dry                Print planned execution order, no changes"
-	@echo "    BATCH_CONFIG=path.json            Override config file (default: batch_triggers.json)"
+	@echo "    BATCH_CONFIG=path.json            Override config file (default: batch_connectors.json)"
 	@echo "    BATCH_RUN_ARGS='--no-resume'      Extra flags: --no-resume, --create-prs, --timeout N"
-	@echo "    Workflow: 1) make batch-run  2) review artifacts_archive/  3) commit approved triggers"
+	@echo "    Workflow: 1) make batch-run  2) review artifacts_archive/  3) commit approved connectors"
 	@echo "              4) make batch-pr-docs BRANCH=...  5) make batch-pr-samples BRANCH=..."
 	@echo ""
 	@echo "  Publish Sample"
@@ -138,9 +139,14 @@ PACKAGE ?=
 export ADDITIONAL_INSTRUCTIONS
 
 run:
-	@[ "$(TRIGGER)" ] || { echo "Usage: make run TRIGGER=trigger.github [PACKAGE=ballerinax/trigger.github]"; exit 1; }
-	@echo "→ Running full pipeline for trigger: $(TRIGGER)$(if $(PACKAGE), (package: $(PACKAGE)),)$(if $(ADDITIONAL_INSTRUCTIONS), (with additional instructions),)"
-	bal run -- $(TRIGGER) $(if $(PACKAGE),"$(PACKAGE)",) $(if $(ADDITIONAL_INSTRUCTIONS),"$$ADDITIONAL_INSTRUCTIONS",)
+	@[ "$(CONNECTOR)$(TRIGGER)" ] || { echo "Usage: make run CONNECTOR=mysql OR make run TRIGGER=trigger.github [PACKAGE=ballerinax/trigger.github]"; exit 1; }
+	@if [ -n "$(TRIGGER)" ]; then \
+		echo "→ Running full pipeline for trigger: $(TRIGGER)$(if $(PACKAGE), (package: $(PACKAGE)),)$(if $(ADDITIONAL_INSTRUCTIONS), (with additional instructions),)"; \
+		bal run -- -t $(TRIGGER) $(if $(PACKAGE),"$(PACKAGE)",) $(if $(ADDITIONAL_INSTRUCTIONS),"$$ADDITIONAL_INSTRUCTIONS",); \
+	else \
+		echo "→ Running full pipeline for connector: $(CONNECTOR)$(if $(ADDITIONAL_INSTRUCTIONS), (with additional instructions),)"; \
+		bal run -- $(CONNECTOR) $(if $(ADDITIONAL_INSTRUCTIONS),"$$ADDITIONAL_INSTRUCTIONS",); \
+	fi
 
 crop-screenshots: python/.venv/.installed
 	python/.venv/bin/python python/crop_screenshots.py
@@ -268,11 +274,11 @@ _batch_pr_cmd = python/.venv/bin/python python/batch_pr_docs.py \
   $(BATCH_PR_DOCS_ARGS)
 
 batch-commit-docs: python/.venv/.installed
-	@echo "→ Committing trigger docs to batch branch$(if $(BRANCH), $(BRANCH),: docs/trigger-docs)..."
+	@echo "→ Committing connector docs to batch branch$(if $(BRANCH), $(BRANCH),: docs/connector-docs)..."
 	$(_batch_commit_cmd)
 
 batch-commit-docs-dry: python/.venv/.installed
-	@echo "→ Dry run: commit trigger docs to batch branch$(if $(BRANCH), $(BRANCH),: docs/trigger-docs)..."
+	@echo "→ Dry run: commit connector docs to batch branch$(if $(BRANCH), $(BRANCH),: docs/connector-docs)..."
 	$(_batch_commit_cmd) --dry-run
 
 batch-pr-docs: python/.venv/.installed
@@ -363,11 +369,11 @@ _batch_pr_samples_cmd = python/.venv/bin/python python/batch_pr_samples.py \
   $(BATCH_PR_SAMPLES_ARGS)
 
 batch-commit-sample: python/.venv/.installed
-	@echo "→ Committing trigger sample to batch branch$(if $(BRANCH), $(BRANCH),: samples/trigger-samples)..."
+	@echo "→ Committing connector sample to batch branch$(if $(BRANCH), $(BRANCH),: samples/connector-samples)..."
 	$(_batch_commit_sample_cmd)
 
 batch-commit-sample-dry: python/.venv/.installed
-	@echo "→ Dry run: commit trigger sample to batch branch$(if $(BRANCH), $(BRANCH),: samples/trigger-samples)..."
+	@echo "→ Dry run: commit connector sample to batch branch$(if $(BRANCH), $(BRANCH),: samples/connector-samples)..."
 	$(_batch_commit_sample_cmd) --dry-run
 
 batch-pr-samples: python/.venv/.installed
@@ -381,7 +387,7 @@ batch-pr-samples-dry: python/.venv/.installed
 	$(_batch_pr_samples_cmd) --dry-run
 
 # ── Batch Run (queue multiple connectors) ─────────────────────────────────────
-BATCH_CONFIG ?= batch_triggers.json
+BATCH_CONFIG ?= batch_connectors.json
 BATCH_RUN_ARGS ?=
 
 batch-run: python/.venv/.installed
