@@ -112,7 +112,6 @@ async def run_agent(job_id: str, prompt_path: str) -> None:
                     "mcp__playwright__browser_type",
                     "mcp__playwright__browser_fill_form",
                     "mcp__playwright__browser_take_screenshot",
-                    "mcp__playwright__browser_run_code",
                     "mcp__playwright__browser_snapshot",
                     "mcp__playwright__browser_evaluate",
                     "mcp__playwright__browser_wait_for",
@@ -134,10 +133,9 @@ async def run_agent(job_id: str, prompt_path: str) -> None:
                         "command": "npx",
                         "args": [
                             "@playwright/mcp@latest",
-                            "--headless",
                             "--viewport-size=1720,968",
-                            f"--output-dir={CWD}/artifacts/screenshots",
-                            "--output-mode",
+                            #f"--output-dir={CWD}/artifacts/screenshots",
+                            #"--output-mode",
                             "stdout",
                         ],
                     }
