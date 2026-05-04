@@ -121,40 +121,24 @@ public function checkExtensionInstalled(string extensionId) returns boolean {
 }
 
 # Ensures a VS Code extension is installed in code-server.
-# First attempts to install from the Open VSX marketplace; if that fails,
-# falls back to installing from a local .vsix file.
+# Installs only from the Open VSX marketplace.
 # + extensionId - the extension identifier (e.g. "wso2.wso2-integrator")
-# + vsixFallbackPath - absolute path to the .vsix file to use as fallback
-# + return - an error if both install attempts fail
-public function ensureExtensionInstalled(string extensionId, string vsixFallbackPath) returns error? {
-    // Attempt 1: marketplace install
+# + return - an error if the marketplace install fails
+public function ensureExtensionInstalled(string extensionId) returns error? {
     log("\t[INFO] Trying marketplace install for: " + extensionId);
     os:Process|error marketProc = os:exec({
         value: "code-server",
         arguments: ["--install-extension", extensionId]
     });
-    if marketProc is os:Process {
-        int|error marketExit = marketProc.waitForExit();
-        if marketExit is int && marketExit == 0 {
-            return;
-        }
+    if marketProc is error {
+        return error("Failed to launch extension install: " + marketProc.message());
     }
-    log("\t[WARN] Marketplace install failed — trying local VSIX: " + vsixFallbackPath);
-
-    // Attempt 2: fallback to local .vsix
-    os:Process|error vsixProc = os:exec({
-        value: "code-server",
-        arguments: ["--install-extension", vsixFallbackPath]
-    });
-    if vsixProc is error {
-        return error("Failed to launch extension install from VSIX: " + vsixProc.message());
+    int|error marketExit = marketProc.waitForExit();
+    if marketExit is error {
+        return error("Extension install process error: " + marketExit.message());
     }
-    int|error vsixExit = vsixProc.waitForExit();
-    if vsixExit is error {
-        return error("Extension install from VSIX process error: " + vsixExit.message());
-    }
-    if vsixExit != 0 {
-        return error("Extension install from VSIX failed with exit code: " + vsixExit.toString());
+    if marketExit != 0 {
+        return error("Marketplace extension install failed with exit code: " + marketExit.toString());
     }
 }
 

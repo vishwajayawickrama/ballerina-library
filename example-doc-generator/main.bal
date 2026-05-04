@@ -131,11 +131,8 @@ public function main(string... args) returns error? {
     utils:log("[STEP 5] Checking WSO2 Integrator extension (wso2.wso2-integrator)...");
     boolean extInstalled = utils:checkExtensionInstalled("wso2.wso2-integrator");
     if !extInstalled {
-        utils:log("\t[INFO] Extension not found. Installing...");
-        string|error cwdForExt = file:getCurrentDir();
-        string projectRootForExt = cwdForExt is string ? cwdForExt : os:getEnv("PWD");
-        string vsixPath = projectRootForExt + "/extensions/wso2.wso2-integrator-0.2.1.vsix";
-        check utils:ensureExtensionInstalled("wso2.wso2-integrator", vsixPath);
+        utils:log("\t[INFO] Extension not found. Installing from marketplace...");
+        check utils:ensureExtensionInstalled("wso2.wso2-integrator");
         utils:log("\t[INFO] Extension installed successfully.");
     } else {
         utils:log("\t[INFO] WSO2 Integrator extension is already installed.");

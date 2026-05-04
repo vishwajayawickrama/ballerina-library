@@ -1,12 +1,14 @@
 # Example Doc Generator
 
-An AI-driven pipeline that automates WSO2 Integrator low-code **trigger** documentation. It uses **Ballerina** to orchestrate prompt generation via the Claude API, then runs a **Python agent server** (Claude Agent SDK + Playwright MCP) that operates a **code-server** instance to capture screenshots and produce step-by-step trigger integration guides.
+An AI-driven pipeline that automates WSO2 Integrator low-code **connector** documentation by default, with an explicit trigger-generation mode. It uses **Ballerina** to orchestrate prompt generation via the Claude API, then runs a **Python agent server** (Claude Agent SDK + Playwright MCP) that operates a **code-server** instance to capture screenshots and produce step-by-step integration guides.
 
 ```
-Trigger → Claude generates execution prompt → Agent executes via Playwright MCP → Artifacts (docs + screenshots)
+Connector/Trigger → Claude generates execution prompt → Agent executes via Playwright MCP → Artifacts (docs + screenshots)
 ```
 
-Supports all 15 WSO2 Integrator trigger types across three categories:
+Default connector generation supports Ballerina Central connectors such as `mysql`, `kafka`, `aws.sns`, and similar `ballerinax/<connector>` packages.
+
+Trigger mode supports all 15 WSO2 Integrator trigger types across three categories:
 - **Integration as API**: HTTP Service (`ballerina/http`), GraphQL Service (`ballerina/graphql`), TCP Service (`ballerina/tcp`)
 - **Event Integration**: Kafka, RabbitMQ, MQTT, Azure Service Bus, Salesforce, Twilio, GitHub, Solace, CDC for MSSQL, CDC for PostgreSQL
 - **File Integration**: FTP/SFTP (`ballerina/ftp`), Local Files (`ballerina/file`)
@@ -21,6 +23,7 @@ Supports all 15 WSO2 Integrator trigger types across three categories:
 | Node.js | LTS+ | [nodejs.org](https://nodejs.org/) |
 | Claude Code CLI | latest | [claude.ai/code](https://claude.ai/code) |
 | code-server | latest | auto-installed by pipeline |
+| WSO2 Integrator extension | latest | installed from marketplace by pipeline |
 
 ## Setup
 
@@ -53,13 +56,20 @@ make setup
 **5. Run the pipeline**
 
 ```bash
+# Connector generation is the default:
+make run CONNECTOR=mysql
+make run CONNECTOR=mysql ADDITIONAL_INSTRUCTIONS='Use a local MySQL database'
+# or directly:
+bal run -- mysql
+
+# Trigger generation is explicit:
 make run TRIGGER=trigger.github PACKAGE=ballerinax/trigger.github
 # For ballerina/* org triggers:
 make run TRIGGER=http PACKAGE=ballerina/http
 # Package defaults to ballerinax/<name> if omitted:
 make run TRIGGER=kafka
 # or directly:
-bal run -- trigger.github ballerinax/trigger.github
+bal run -- -t trigger.github ballerinax/trigger.github
 ```
 
 Artifacts are saved under `artifacts/` (git-ignored).
@@ -78,7 +88,9 @@ Copy `Config.toml.example` to get started.
 | `codeServerPort` | No | `8080` | Port for the code-server instance |
 | `agentServerPort` | No | `8765` | Port for the Python agent server |
 
-> **Trigger name and package** are passed as CLI arguments: `make run TRIGGER=trigger.github PACKAGE=ballerinax/trigger.github` or `bal run -- trigger.github ballerinax/trigger.github`. Package defaults to `ballerinax/<name>` when omitted.
+> **Connector generation is the default:** pass the connector name with `make run CONNECTOR=mysql` or `bal run -- mysql`.
+
+> **Trigger generation uses `-t`:** pass trigger name/package with `make run TRIGGER=trigger.github PACKAGE=ballerinax/trigger.github` or `bal run -- -t trigger.github ballerinax/trigger.github`. Package defaults to `ballerinax/<name>` when omitted.
 
 > **Never commit `Config.toml`** — it is git-ignored.
 
@@ -104,7 +116,7 @@ Copy `.env.example` to get started. Used by `publish_docs.py`, `publish_sample.p
 
 ```
 example-doc-generator/
-├── main.bal                        # Pipeline entry point (17-step orchestration)
+├── main.bal                        # Pipeline entry point with connector/trigger mode selection
 ├── config.bal                      # All configurable fields
 ├── Ballerina.toml                  # Package manifest
 ├── Config.toml.example             # Configuration template
@@ -114,8 +126,10 @@ example-doc-generator/
 │   ├── ai_client/ai_client.bal     # Anthropic API calls (generate, slug, enforce)
 │   ├── agent_client/agent_client.bal  # REST client for the Python agent server
 │   ├── prompts/
-│   │   ├── system_prompt.bal       # XML-tagged execution prompt template
-│   │   ├── user_prompt.bal         # User message builder
+│   │   ├── system_prompt.bal       # Connector XML-tagged execution prompt template
+│   │   ├── user_prompt.bal         # Connector user message builder
+│   │   ├── system_prompt_trigger.bal  # Trigger XML-tagged execution prompt template
+│   │   ├── user_prompt_trigger.bal    # Trigger user message builder
 │   │   └── doc_enforcement_prompt.bal  # Doc structure enforcement prompt
 │   └── utils/                      # Logger, file I/O, code-server & agent server utils
 │
@@ -145,12 +159,14 @@ Setup
   make setup-bal            Build the Ballerina project
 
 Run
-  make run TRIGGER=trigger.github                        Run the full pipeline for a trigger
-  make run TRIGGER=http PACKAGE=ballerina/http           Run with explicit package path
+  make run CONNECTOR=mysql                               Run the full pipeline for a connector
+  make run CONNECTOR=mysql ADDITIONAL_INSTRUCTIONS='...' Run with per-connector guidance
+  make run TRIGGER=trigger.github                        Run the full pipeline for a trigger (-t)
+  make run TRIGGER=http PACKAGE=ballerina/http           Run trigger mode with explicit package path
   make start-agent          Start the Python agent server in the foreground
   make stop-agent           Send shutdown to the agent server
 
-Publish (not yet wired for triggers)
+Publish
   make publish-docs         Publish docs + create PR to docs-integrator
   make publish-docs-dry     Dry run — print planned actions, no changes
 
@@ -170,7 +186,7 @@ Run `make help` for the full list with configurable variables.
 | Phase | Steps | Description |
 |-------|-------|-------------|
 | Pre-flight | 1–2 | Validate API key; check Claude Code CLI is installed |
-| Infrastructure | 3–6 | Install/start code-server; install/start Python agent server |
+| Infrastructure | 3–6 | Install/start code-server; install WSO2 Integrator from marketplace; install/start Python agent server |
 | Prompt generation | 7–10 | Build prompts → call Claude → format → save execution prompt |
 | Agent execution | 11 | POST prompt to agent server; stream logs until done |
 | Post-processing | 12–14 | Enforce doc structure; crop screenshots; write run log |
