@@ -19,11 +19,7 @@
 publish_docs.py
 
 Post-pipeline script: places generated connector documentation into the
-WSO2 Integrator docs-integrator fork, creates a feature branch and PR,
-and adds Playwright screenshots of the rendered docs page to the PR body.
-
-Preview screenshots are uploaded as pre-release assets on the fork repo —
-they are NOT committed to the docs-integrator repository.
+WSO2 Integrator docs-integrator fork, creates a feature branch and PR.
 
 Usage:
     python python/publish_docs.py [options]
@@ -32,34 +28,24 @@ Optional:
     --artifacts-dir PATH    Path to pipeline artifacts directory (default: ./artifacts)
     --category CATEGORY     Connector category — required if not in the built-in map
     --no-pr                 Push the branch but skip creating a pull request
-    --no-preview            Skip Playwright preview screenshots
     --dry-run               Print planned actions without making any changes
 
-Defaults for repo paths and GitHub identifiers are read from .env (see .env.example).
+Defaults for repo paths and GitHub identifiers are read from Config.toml.
 
 Prerequisites:
     - gh CLI authenticated (gh auth login)
     - docs-integrator fork cloned locally with 'upstream' remote configured:
         git remote add upstream https://github.com/wso2/docs-integrator.git
-    - Playwright installed: python -m playwright install chromium
-    - For preview screenshots: node_modules installed in {docs_repo}/en/
 """
 
 import argparse
-import datetime
 from collections.abc import Sequence
-import os
 import re
-import signal
 import subprocess
 import sys
-import time
-import urllib.request
 from pathlib import Path
 
-from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).parent.parent / ".env")
+from runtime_config import get_path, get_str
 
 # Path to the connector name file written by the Ballerina pipeline at startup
 CONNECTOR_NAME_FILE = Path("artifacts/run-log/connector-name.txt")
@@ -195,20 +181,15 @@ CATEGORY_MAP: dict[str, str] = {
 
 AVAILABLE_CATEGORIES = sorted(set(CATEGORY_MAP.values()))
 
-DEFAULT_UPSTREAM = os.environ.get("DOCS_INTEGRATOR_UPSTREAM", "wso2/docs-integrator")
-DEFAULT_BASE_BRANCH = os.environ.get("DOCS_INTEGRATOR_BASE_BRANCH", "main")
-PREVIEW_PORT = 3333
-VIEWPORT_WIDTH = 1440
-VIEWPORT_HEIGHT = 900
-
-# Default docs-integrator path: env var, then sibling of this workspace
+DEFAULT_UPSTREAM = get_str("docsIntegratorUpstream", "wso2/docs-integrator")
+DEFAULT_BASE_BRANCH = get_str("docsIntegratorBaseBranch", "main")
+# Default docs-integrator path: Config.toml, then sibling of this workspace
 # Layout: <workspace>/connector-docs-automations/python/publish_docs.py
 #         <workspace>/docs-integrator/
 _WORKSPACE_ROOT = Path(__file__).resolve().parent.parent.parent
-_env_docs_repo = os.environ.get("DOCS_INTEGRATOR_REPO")
-DEFAULT_DOCS_REPO = (
-    Path(_env_docs_repo) if _env_docs_repo
-    else _WORKSPACE_ROOT / "docs-integrator"
+DEFAULT_DOCS_REPO = get_path(
+    "docsIntegratorRepo",
+    _WORKSPACE_ROOT / "docs-integrator",
 )
 
 
@@ -515,160 +496,7 @@ Confirm each step as you complete it. If a step fails, report the error clearly.
     info("Claude Code placement complete.")
 
 
-# ── Step 9: Docusaurus preview screenshots ────────────────────────────────────
-
-def take_preview_screenshots(
-    docs_repo: Path,
-    connector_slug: str,
-    category: str,
-    artifacts_dir: Path,
-    dry_run: bool,
-) -> list[Path]:
-    """
-    Start Docusaurus dev server, take scroll-based desktop screenshots
-    of the connector example page covering all content.
-    Returns list of screenshot paths saved to artifacts/preview-screenshots/.
-    """
-    if dry_run:
-        dry("Start Docusaurus server and take full-page desktop preview screenshots")
-        return []
-
-    en_dir = docs_repo / "en"
-    if not (en_dir / "node_modules").exists():
-        fail(
-            f"node_modules not found in {en_dir}.\n"
-            f"Run: cd {en_dir} && npm install"
-        )
-
-    preview_dir = artifacts_dir / "preview-screenshots"
-    preview_dir.mkdir(parents=True, exist_ok=True)
-
-    page_url = (
-        f"http://localhost:{PREVIEW_PORT}/docs/connectors/catalog"
-        f"/{category}/{connector_slug}/example"
-    )
-
-    info("Starting Docusaurus dev server...")
-    server_proc = subprocess.Popen(
-        ["npm", "run", "start", "--", f"--port={PREVIEW_PORT}", "--no-open"],
-        cwd=str(en_dir),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-    # Poll until server is ready (max 90s)
-    ready = False
-    for _ in range(90):
-        try:
-            urllib.request.urlopen(f"http://localhost:{PREVIEW_PORT}", timeout=1)
-            ready = True
-            break
-        except Exception:
-            time.sleep(1)
-
-    if not ready:
-        server_proc.kill()
-        fail(f"Docusaurus server did not start within 90s on port {PREVIEW_PORT}.")
-
-    info(f"Server ready. Navigating to: {page_url}")
-
-    screenshot_files: list[Path] = []
-    try:
-        from playwright.sync_api import sync_playwright  # type: ignore
-
-        with sync_playwright() as p:
-            browser = p.chromium.launch()
-            page = browser.new_page(
-                viewport={"width": VIEWPORT_WIDTH, "height": VIEWPORT_HEIGHT}
-            )
-            page.goto(page_url)
-            page.wait_for_load_state("networkidle")
-            page.wait_for_timeout(1000)  # let any animations/fonts settle
-
-            page_height: int = page.evaluate("document.body.scrollHeight")
-            info(f"Page height: {page_height}px — taking scroll screenshots at {VIEWPORT_HEIGHT}px steps")
-
-            # Build scroll positions: 0, 900, 1800, … + final bottom position
-            positions = list(range(0, page_height, VIEWPORT_HEIGHT))
-            # Ensure the very bottom of the page is always captured
-            bottom = max(0, page_height - VIEWPORT_HEIGHT)
-            if not positions or positions[-1] < bottom:
-                positions.append(bottom)
-
-            for i, scroll_y in enumerate(positions, start=1):
-                page.evaluate(f"window.scrollTo(0, {scroll_y})")
-                page.wait_for_timeout(400)  # let lazy-loaded images render
-                out = preview_dir / f"{connector_slug.replace('.', '_')}_preview_{i:02d}.png"
-                page.screenshot(path=str(out))
-                screenshot_files.append(out)
-                info(f"  [{i:02d}] scroll={scroll_y}px → {out.name}")
-
-            browser.close()
-    finally:
-        server_proc.send_signal(signal.SIGTERM)
-        try:
-            server_proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            server_proc.kill()
-        info("Docusaurus server stopped.")
-
-    info(f"Captured {len(screenshot_files)} preview screenshot(s).")
-    return screenshot_files
-
-
-def upload_preview_as_release(
-    screenshot_files: list[Path],
-    connector_name: str,
-    connector_slug: str,
-    branch_name: str,
-    fork: str,
-) -> list[str]:
-    """
-    Upload preview screenshots as assets on a pre-release tag of the fork.
-    Returns list of GitHub release asset download URLs for embedding in markdown.
-
-    The release is marked as pre-release and can be deleted after PR review.
-    Images are NOT committed to the docs-integrator repository.
-    """
-    if not screenshot_files:
-        return []
-
-    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    tag = f"docs-preview-{connector_slug.replace('.', '_')}-{timestamp}"
-    title = f"Doc preview: {connector_name} connector example"
-    notes = (
-        f"Preview screenshots of the rendered docs page for branch `{branch_name}`.\n\n"
-        "> This pre-release exists only for PR review purposes and can be deleted after the PR is merged."
-    )
-
-    info(f"Uploading {len(screenshot_files)} preview screenshot(s) as release assets on {fork}...")
-    cmd = [
-        "gh", "release", "create", tag,
-        "--repo", fork,
-        "--title", title,
-        "--notes", notes,
-        "--prerelease",
-    ] + [str(f) for f in screenshot_files]
-
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-        release_url = result.stdout.strip()
-        info(f"Pre-release created: {release_url}")
-    except subprocess.CalledProcessError as e:
-        warn(
-            f"Failed to create GitHub release: {e.stderr.strip()}\n"
-            "Preview screenshots will not be included in the PR body."
-        )
-        return []
-
-    fork_owner, fork_repo = fork.split("/")
-    return [
-        f"https://github.com/{fork_owner}/{fork_repo}/releases/download/{tag}/{f.name}"
-        for f in screenshot_files
-    ]
-
-
-# ── Step 10: Commit and push ──────────────────────────────────────────────────
+# ── Step 9: Commit and push ───────────────────────────────────────────────────
 
 def commit_and_push(
     docs_repo: Path,
@@ -701,22 +529,9 @@ def build_pr_body(
     connector_name: str,
     operation_name: str,
     category: str,
-    connector_slug: str,
-    preview_urls: list[str],
+    connector_slug: str
 ) -> str:
     """Build the WSO2 PR template body with docs-relevant sections only."""
-    preview_section = ""
-    if preview_urls:
-        images = "\n\n".join(
-            f"![Desktop preview {i + 1:02d}]({url})"
-            for i, url in enumerate(preview_urls)
-        )
-        preview_section = (
-            "\n\n## Doc page preview (desktop)\n\n"
-            "> Playwright screenshots of the rendered example page taken locally.\n\n"
-            f"{images}"
-        )
-
     return f"""\
 ## Purpose
 
@@ -731,8 +546,7 @@ in the WSO2 Integrator low-code canvas
 
 ## Approach
 
-Content generated by the connector-docs-automations pipeline. \
-Example page preview screenshots are included at the bottom of this description.
+Content generated by the connector-docs-automations pipeline.
 
 ## Release note
 
@@ -749,7 +563,6 @@ Added {connector_name} connector example guide showing how to configure the \
 
 - Followed secure coding standards: N/A (documentation only)
 - Ran FindSecurityBugs plugin: N/A (documentation only)
-{preview_section}
 """
 
 
@@ -798,14 +611,14 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Publish connector docs to the WSO2 Integrator docs-integrator fork "
-            "and create a PR with Playwright preview screenshots."
+            "and create a PR."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
             "  python python/publish_docs.py\n"
             "  python python/publish_docs.py --dry-run\n"
-            "  python python/publish_docs.py --category messaging --no-preview\n"
+            "  python python/publish_docs.py --category messaging\n"
             "  python python/publish_docs.py --docs-repo ~/repos/docs-integrator\n"
         ),
     )
@@ -826,11 +639,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--fork",
-        default=os.environ.get("DOCS_INTEGRATOR_FORK"),
+        default=get_str("docsIntegratorFork", "") or None,
         metavar="OWNER/REPO",
         help=(
             "Fork repo slug, e.g. your-org/docs-integrator "
-            "(default: DOCS_INTEGRATOR_FORK env var; inferred from git remote 'origin' if unset)"
+            "(default: docsIntegratorFork in Config.toml; inferred from "
+            "git remote 'origin' if unset)"
         ),
     )
     parser.add_argument(
@@ -857,11 +671,6 @@ def parse_args() -> argparse.Namespace:
         "--no-pr",
         action="store_true",
         help="Push the branch but skip creating a pull request",
-    )
-    parser.add_argument(
-        "--no-preview",
-        action="store_true",
-        help="Skip Playwright preview screenshots",
     )
     parser.add_argument(
         "--dry-run",
@@ -927,23 +736,9 @@ def main() -> None:
         print("=" * 79)
         return
 
-    # ── 10. Preview screenshots (not committed to docs repo) ──────────────────
-    preview_urls: list[str] = []
-    if not args.no_preview:
-        try:
-            preview_files = take_preview_screenshots(
-                docs_repo, connector_slug, category, artifacts_dir, args.dry_run
-            )
-            if preview_files and not args.dry_run:
-                preview_urls = upload_preview_as_release(
-                    preview_files, connector_name, connector_slug, branch_name, fork
-                )
-        except Exception as exc:
-            warn(f"Preview step failed (branch already pushed — continuing to PR creation): {exc}")
-
-    # ── 11. Create PR ─────────────────────────────────────────────────────────
+    # ── 10. Create PR ─────────────────────────────────────────────────────────
     pr_body = build_pr_body(
-        connector_name, operation_name, category, connector_slug, preview_urls
+        connector_name, operation_name, category, connector_slug
     )
     pr_url = create_pr(
         fork, upstream, args.base_branch,

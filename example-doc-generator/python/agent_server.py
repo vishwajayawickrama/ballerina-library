@@ -39,13 +39,15 @@ import os
 import uuid
 from pathlib import Path
 
-from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).parent.parent / ".env")
+from runtime_config import get_int, get_str
 
 # Unset CLAUDECODE so the SDK can spawn a Claude Code subprocess even when
 # this server is launched from within an active Claude Code session.
 os.environ.pop("CLAUDECODE", None)
+if not os.environ.get("ANTHROPIC_API_KEY"):
+    llm_api_key = get_str("llmApiKey", "")
+    if llm_api_key:
+        os.environ["ANTHROPIC_API_KEY"] = llm_api_key
 
 from aiohttp import web
 from claude_agent_sdk import (
@@ -92,20 +94,19 @@ async def run_agent(job_id: str, prompt_path: str) -> None:
     try:
         raw = Path(prompt_path).read_text()
         prompt = (
-            "Execute the workflow defined in the execution prompt below end-to-end. "
-            "Follow every stage in order, call the required Playwright MCP tools to "
-            "drive the WSO2 Integrator UI in code-server, capture every mandatory "
-            "screenshot (exactly 7: _01_artifact_palette, _02_trigger_config_form, "
-            "_03_configurations_panel, _04_add_handler_panel, "
-            "_05_message_define_value, _06_handler_flow, _07_service_view_final), "
-            "and write the final workflow document to artifacts/workflow-docs/. "
-            "Debug captures must go to /tmp/, never to artifacts/screenshots/. "
-            "Verify the expected anchor element is visible via browser_snapshot "
-            "BEFORE every browser_take_screenshot call. If the user message's "
-            "ADDITIONAL INSTRUCTIONS block specifies an alternate source surface "
-            "for any screenshot slot (e.g. for triggers without a literal Add "
-            "Handler side panel or Define Value modal), follow that override "
-            "exactly. Do NOT ask for confirmation — begin immediately with Stage 1.\n\n---\n\n"
+            "Execute the workflow defined in the execution prompt below "
+            "end-to-end. Follow every stage in order and use the required "
+            "Playwright MCP tools to drive the WSO2 Integrator UI in "
+            "code-server. Treat the execution prompt as the source of truth "
+            "for the workflow type, screenshot count, screenshot filenames, "
+            "milestone surfaces, validation anchors, documentation structure, "
+            "output paths, and any additional instructions. Capture only the "
+            "screenshots required by that prompt, write exploratory/debug "
+            "captures outside artifacts/screenshots/, and write the final "
+            "workflow document to artifacts/workflow-docs/. Before every "
+            "documentation screenshot, use browser_snapshot to verify the "
+            "expected UI state described by the execution prompt. Do NOT ask "
+            "for confirmation — begin immediately with Stage 1.\n\n---\n\n"
             + raw
         )
 
@@ -263,8 +264,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Claude Agent SDK HTTP server")
     parser.add_argument(
         "--port", type=int,
-        default=int(os.environ.get("AGENT_SERVER_PORT", 8765)),
-        help="Port to listen on (default: AGENT_SERVER_PORT env var, then 8765)",
+        default=get_int("agentServerPort", 8765),
+        help="Port to listen on (default: agentServerPort in Config.toml)",
     )
     args = parser.parse_args()
 

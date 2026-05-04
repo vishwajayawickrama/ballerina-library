@@ -15,14 +15,9 @@
 // under the License.
 
 import ballerina/file;
-import ballerina/os;
 import tensors/imagekit;
 
 const string SCREENSHOTS_DIR = "./artifacts/screenshots";
-const int DEFAULT_CROP_TOP = 32;
-const int DEFAULT_CROP_BOTTOM = 18;
-const int DEFAULT_CROP_LEFT = 0;
-const int DEFAULT_CROP_RIGHT = 0;
 
 # Crops UI chrome from pipeline screenshots in-place.
 #
@@ -30,6 +25,33 @@ const int DEFAULT_CROP_RIGHT = 0;
 # + backup - write .orig.png backups before replacing images
 # + return - an error if cropping fails
 public function cropScreenshots(boolean dryRun = false, boolean backup = false) returns error? {
+    return cropScreenshotsWithMargins(
+        dryRun,
+        backup,
+        top = 32,
+        bottom = 18,
+        left = 0,
+        right = 0
+    );
+}
+
+# Crops UI chrome from pipeline screenshots in-place with explicit margins.
+#
+# + dryRun - print planned crop operations without writing files
+# + backup - write .orig.png backups before replacing images
+# + top - pixels to crop from the top edge
+# + bottom - pixels to crop from the bottom edge
+# + left - pixels to crop from the left edge
+# + right - pixels to crop from the right edge
+# + return - an error if cropping fails
+public function cropScreenshotsWithMargins(
+    boolean dryRun = false,
+    boolean backup = false,
+    int top = 32,
+    int bottom = 18,
+    int left = 0,
+    int right = 0
+) returns error? {
     boolean screenshotsDirExists = check file:test(SCREENSHOTS_DIR, file:EXISTS);
     if !screenshotsDirExists {
         log("[INFO] " + SCREENSHOTS_DIR + " does not exist — no screenshots to crop.");
@@ -37,10 +59,10 @@ public function cropScreenshots(boolean dryRun = false, boolean backup = false) 
     }
 
     check removeDebugScreenshots();
-    int top = check cropMarginFromEnv("CROP_TOP", DEFAULT_CROP_TOP);
-    int bottom = check cropMarginFromEnv("CROP_BOTTOM", DEFAULT_CROP_BOTTOM);
-    int left = check cropMarginFromEnv("CROP_LEFT", DEFAULT_CROP_LEFT);
-    int right = check cropMarginFromEnv("CROP_RIGHT", DEFAULT_CROP_RIGHT);
+    check validateCropMargin("cropTop", top);
+    check validateCropMargin("cropBottom", bottom);
+    check validateCropMargin("cropLeft", left);
+    check validateCropMargin("cropRight", right);
 
     imagekit:CropSummary summary = check imagekit:cropDirectory(
         SCREENSHOTS_DIR,
@@ -78,16 +100,10 @@ function removeDebugScreenshots() returns error? {
     }
 }
 
-function cropMarginFromEnv(string name, int defaultValue) returns int|error {
-    string raw = os:getEnv(name);
-    if raw == "" {
-        return defaultValue;
-    }
-    int margin = check int:fromString(raw);
+function validateCropMargin(string name, int margin) returns error? {
     if margin < 0 {
-        return error("Environment variable " + name + " must be >= 0, got: " + margin.toString());
+        return error("Config.toml value " + name + " must be >= 0, got: " + margin.toString());
     }
-    return margin;
 }
 
 function fileName(string path) returns string {

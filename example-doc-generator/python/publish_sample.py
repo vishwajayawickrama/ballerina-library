@@ -40,36 +40,36 @@ Prerequisites:
 """
 
 import argparse
-import os
 import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 
-load_dotenv(Path(__file__).parent.parent / ".env")
+from runtime_config import get_path, get_str
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
 PROJECT_PATH_FILE = "artifacts/run-log/created-project.txt"
 PUBLISHED_SAMPLE_LOG = "artifacts/run-log/published-sample-path.txt"
 
-# Default integration-samples path: env var, then sibling of this workspace
+# Default integration-samples path: Config.toml, then sibling of this workspace
 # Layout: <workspace>/connector-docs-automations/python/publish_sample.py
 #         <workspace>/integration-samples/
 _WORKSPACE_ROOT = Path(__file__).resolve().parent.parent.parent
-_env_samples_repo = os.environ.get("INTEGRATION_SAMPLES_REPO")
-DEFAULT_SAMPLES_REPO = (
-    Path(_env_samples_repo) if _env_samples_repo
-    else _WORKSPACE_ROOT / "integration-samples"
+DEFAULT_SAMPLES_REPO = get_path(
+    "integrationSamplesRepo",
+    _WORKSPACE_ROOT / "integration-samples",
 )
 
-DEFAULT_CODE_SERVER_PORT = os.environ.get("CODE_SERVER_PORT", "8080")
-DEFAULT_UPSTREAM_REPO = os.environ.get("INTEGRATION_SAMPLES_UPSTREAM", "wso2/integration-samples")
-DEFAULT_BASE_BRANCH = os.environ.get("INTEGRATION_SAMPLES_BASE_BRANCH", "main")
+DEFAULT_CODE_SERVER_PORT = get_str("codeServerPort", "8080")
+DEFAULT_UPSTREAM_REPO = get_str(
+    "integrationSamplesUpstream",
+    "wso2/integration-samples",
+)
+DEFAULT_BASE_BRANCH = get_str("integrationSamplesBaseBranch", "main")
 
 
 # ── Logging helpers ───────────────────────────────────────────────────────────
@@ -419,7 +419,7 @@ def parse_args() -> argparse.Namespace:
         default=f"http://localhost:{DEFAULT_CODE_SERVER_PORT}",
         help=(
             f"code-server URL (default: http://localhost:{DEFAULT_CODE_SERVER_PORT} "
-            f"from CODE_SERVER_PORT env var)"
+            f"from codeServerPort in Config.toml)"
         ),
     )
     parser.add_argument(

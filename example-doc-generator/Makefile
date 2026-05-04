@@ -1,15 +1,13 @@
 .PHONY: help setup setup-python setup-bal build run \
         start-agent stop-agent \
         crop-screenshots crop-screenshots-dry crop-screenshots-backup \
-        publish-docs publish-docs-dry publish-docs-no-preview publish-docs-no-pr \
-        pr-preview pr-preview-no-preview pr-preview-no-pr pr-preview-dry \
+        publish-docs publish-docs-dry publish-docs-no-pr \
         batch-commit-docs batch-commit-docs-dry \
         batch-pr-docs batch-pr-docs-dry \
         batch-commit-sample batch-commit-sample-dry \
         batch-pr-samples batch-pr-samples-dry \
-        batch-run batch-run-dry \
+        batch-run batch-run-dry pipeline-commit pipeline-commit-dry pipeline-pr pipeline-pr-dry \
         publish-sample publish-sample-dry publish-sample-no-pr publish-sample-no-publish \
-        publish-all publish-all-dry publish-all-no-preview publish-all-no-pr publish-all-open \
         cleanup cleanup-dry \
         clean clean-artifacts
 
@@ -34,21 +32,21 @@ help:
 	@echo "  Publish"
 	@echo "    make publish-docs             Publish docs + create PR (auto-detects docs-integrator path)"
 	@echo "    make publish-docs-dry         Dry run — print planned actions, no changes"
-	@echo "    make publish-docs-no-preview  Publish docs without Playwright preview screenshots"
 	@echo "    make publish-docs-no-pr       Push branch + commit only, skip PR creation"
 	@echo "    PUBLISH_ARGS='...'            Pass extra flags, e.g. PUBLISH_ARGS='--category security-identity'"
 	@echo "    DOCS_REPO=PATH                Override docs-integrator path"
-	@echo "    DOCS_UPSTREAM=OWNER/REPO      Override docs PR target repo (.env: DOCS_INTEGRATOR_UPSTREAM)"
-	@echo "    DOCS_BASE_BRANCH=BRANCH       Override docs PR base branch (.env: DOCS_INTEGRATOR_BASE_BRANCH)"
+	@echo "    DOCS_UPSTREAM=OWNER/REPO      Override docs PR target repo"
+	@echo "    DOCS_BASE_BRANCH=BRANCH       Override docs PR base branch"
 	@echo ""
-	@echo "  PR Preview (for already-committed remote branches)"
-	@echo "    make pr-preview BRANCH=<branch>           Preview + PR for an existing remote branch"
-	@echo "    make pr-preview-no-preview BRANCH=<branch> PR only, skip screenshots"
-	@echo "    make pr-preview-no-pr BRANCH=<branch>     Screenshots only, skip PR creation"
-	@echo "    make pr-preview-dry BRANCH=<branch>       Dry run"
-	@echo "    BRANCH=<name>                             Required: the remote branch name"
+	@echo "  Unified Pipeline"
+	@echo "    make batch-run                            Run queue from batch_connectors.json"
+	@echo "    make batch-run-dry                        Print planned execution order, no changes"
+	@echo "    make pipeline-commit                      Commit current docs + sample to batch branches"
+	@echo "    make pipeline-pr                          Create docs + sample PRs from batch branches"
+	@echo "    DOCS_BRANCH=<branch>                      Docs batch branch (default: docs/connector-docs)"
+	@echo "    SAMPLES_BRANCH=<branch>                   Samples batch branch (default: samples/connector-samples)"
 	@echo ""
-	@echo "  Batch Docs (commit multiple connectors to one branch, then one PR)"
+	@echo "  Batch Docs (commit reviewed docs to one branch, then one PR)"
 	@echo "    make batch-commit-docs                   Commit current connector artifacts (default branch: docs/connector-docs)"
 	@echo "    make batch-commit-docs BRANCH=<branch>   Commit to a custom branch"
 	@echo "    make batch-commit-docs-dry               Dry run"
@@ -58,10 +56,10 @@ help:
 	@echo "    CATEGORY=<cat>                            Override auto-detected connector category"
 	@echo "    ARTIFACTS_DIR=<path>                      Override artifacts directory"
 	@echo "    DOCS_FORK=<owner/repo>                    Override fork slug"
-	@echo "    BATCH_COMMIT_DOCS_ARGS=<flags>            Extra flags for batch_commit_docs.py"
-	@echo "    BATCH_PR_DOCS_ARGS=<flags>                Extra flags for batch_pr_docs.py"
-	@echo "    Workflow: run pipeline for each connector → 'make batch-commit-docs' each time"
-	@echo "              → 'make batch-pr-docs BRANCH=...' once when all connectors are committed"
+	@echo "    BATCH_COMMIT_DOCS_ARGS=<flags>            Extra flags for pipeline.py commit-docs"
+	@echo "    BATCH_PR_DOCS_ARGS=<flags>                Extra flags for pipeline.py pr-docs"
+	@echo "    Workflow: review artifacts → 'make batch-commit-docs' for each approved item"
+	@echo "              → 'make batch-pr-docs BRANCH=...' once all docs are committed"
 	@echo ""
 	@echo "  Batch Samples (commit multiple samples to one branch, then one PR)"
 	@echo "    make batch-commit-sample                   Commit current sample (default branch: samples/connector-samples)"
@@ -70,18 +68,16 @@ help:
 	@echo "    make batch-pr-samples BRANCH=<branch>      Create one PR from the shared branch"
 	@echo "    make batch-pr-samples-dry BRANCH=<branch>  Dry run"
 	@echo "    BRANCH=<name>                               Optional for commit (default: samples/connector-samples); required for PR"
-	@echo "    BATCH_COMMIT_SAMPLE_ARGS=<flags>            Extra flags for batch_commit_sample.py"
-	@echo "    BATCH_PR_SAMPLES_ARGS=<flags>               Extra flags for batch_pr_samples.py"
-	@echo "    Workflow: run pipeline for each connector → 'make batch-commit-sample' each time"
-	@echo "              → 'make batch-pr-samples BRANCH=...' once when all samples are committed"
+	@echo "    BATCH_COMMIT_SAMPLE_ARGS=<flags>            Extra flags for pipeline.py commit-sample"
+	@echo "    BATCH_PR_SAMPLES_ARGS=<flags>               Extra flags for pipeline.py pr-samples"
+	@echo "    Workflow: review project → 'make batch-commit-sample' for each approved sample"
+	@echo "              → 'make batch-pr-samples BRANCH=...' once all samples are committed"
 	@echo ""
-	@echo "  Batch Run (queue multiple connectors sequentially)"
-	@echo "    make batch-run                    Run queue from batch_connectors.json"
-	@echo "    make batch-run-dry                Print planned execution order, no changes"
+	@echo "  Batch Run (queue multiple connectors/triggers sequentially)"
 	@echo "    BATCH_CONFIG=path.json            Override config file (default: batch_connectors.json)"
 	@echo "    BATCH_RUN_ARGS='--no-resume'      Extra flags: --no-resume, --create-prs, --timeout N"
-	@echo "    Workflow: 1) make batch-run  2) review artifacts_archive/  3) commit approved connectors"
-	@echo "              4) make batch-pr-docs BRANCH=...  5) make batch-pr-samples BRANCH=..."
+	@echo "    Workflow: 1) make batch-run  2) review artifacts_archive/  3) commit approved items"
+	@echo "              4) make pipeline-pr"
 	@echo ""
 	@echo "  Publish Sample"
 	@echo "    make publish-sample               Publish integration sample PR + delete local project + close tabs"
@@ -89,21 +85,12 @@ help:
 	@echo "    make publish-sample-no-pr         Push branch + commit only, skip PR creation"
 	@echo "    make publish-sample-no-publish    Delete local project + close tabs, skip sample publishing"
 	@echo "    PUBLISH_SAMPLE_ARGS='...'         Pass extra flags to publish_sample.py"
-	@echo "    CODE_SERVER_PORT=N                Override code-server port (.env: CODE_SERVER_PORT)"
-	@echo "    SAMPLES_REPO=PATH                 Override integration-samples path (.env: INTEGRATION_SAMPLES_REPO)"
-	@echo "    INTEGRATION_UPSTREAM=OWNER/REPO   Override samples PR target repo (.env: INTEGRATION_SAMPLES_UPSTREAM)"
-	@echo "    INTEGRATION_BASE_BRANCH=BRANCH    Override samples PR base branch (.env: INTEGRATION_SAMPLES_BASE_BRANCH)"
+	@echo "    CODE_SERVER_PORT=N                Override code-server port"
+	@echo "    SAMPLES_REPO=PATH                 Override integration-samples path"
+	@echo "    INTEGRATION_UPSTREAM=OWNER/REPO   Override samples PR target repo"
+	@echo "    INTEGRATION_BASE_BRANCH=BRANCH    Override samples PR base branch"
 	@echo "    PROJECT_PATH=PATH                 Manually set project path (writes created-project.txt)"
 	@echo "    NO_PR=1                           Push branch but skip PR creation"
-	@echo ""
-	@echo "  Publish All (docs + sample together)"
-	@echo "    make publish-all              Run publish-docs then publish-sample, show both PR links"
-	@echo "    make publish-all-dry          Dry run for both scripts, no changes"
-	@echo "    make publish-all-no-preview   Skip Playwright preview screenshots"
-	@echo "    make publish-all-no-pr        Push both branches, skip PR creation"
-	@echo "    make publish-all-open         Run both and open PR links in the browser automatically"
-	@echo "    PUBLISH_ALL_ARGS='...'        Extra flags forwarded to publish_all.py"
-	@echo "    (Docs + Sample overrides above all apply here too)"
 	@echo ""
 	@echo "  Artifacts"
 	@echo "    make clean            Remove artifacts/, target/, Dependencies.toml, python/.venv"
@@ -166,8 +153,8 @@ stop-agent:
 	curl -s -X POST http://localhost:$(AGENT_SERVER_PORT)/shutdown || echo "Agent server not running."
 
 # ── Publish docs ─────────────────────────────────────────────────────────────
-# Defaults are read from .env by publish_docs.py.
-# Set these Makefile vars to override .env values for a single run.
+# Defaults are read from Config.toml by publish_docs.py.
+# Set these Makefile vars to override Config.toml values for a single run.
 # DOCS_REPO          — override the docs-integrator path
 # DOCS_UPSTREAM      — GitHub org/repo for docs-integrator PRs
 # DOCS_BASE_BRANCH   — base branch for docs-integrator PRs
@@ -176,6 +163,10 @@ stop-agent:
 DOCS_REPO ?=
 DOCS_UPSTREAM ?=
 DOCS_BASE_BRANCH ?=
+DOCS_BRANCH ?= docs/connector-docs
+SAMPLES_BRANCH ?= samples/connector-samples
+
+_pipeline_cmd = python/.venv/bin/python python/pipeline.py
 
 _publish_docs_cmd = python/.venv/bin/python python/publish_docs.py \
   $(if $(DOCS_REPO),--docs-repo "$(DOCS_REPO)",) \
@@ -191,57 +182,19 @@ publish-docs-dry: python/.venv/.installed
 	@echo "→ Publishing connector docs (dry run)..."
 	$(_publish_docs_cmd) --dry-run
 
-publish-docs-no-preview: python/.venv/.installed
-	@echo "→ Publishing connector docs (no preview)..."
-	$(_publish_docs_cmd) --no-preview
-
 publish-docs-no-pr: python/.venv/.installed
 	@echo "→ Publishing connector docs (branch + commit only, no PR)..."
 	$(_publish_docs_cmd) --no-pr
 
-# ── PR Preview (for already-committed remote branches) ────────────────────────
-# Use these targets when docs were already committed and pushed but the preview
-# or PR step failed. Pass the remote branch name as BRANCH=<name>.
-#
-# Example:
-#   make pr-preview BRANCH=docs/add-zoom.meetings-connector-example-documentation
-
-_pr_preview_cmd = python/.venv/bin/python python/pr_preview.py \
-  $(if $(DOCS_REPO),--docs-repo "$(DOCS_REPO)",) \
-  $(if $(DOCS_UPSTREAM),--upstream "$(DOCS_UPSTREAM)",) \
-  $(if $(DOCS_BASE_BRANCH),--base-branch "$(DOCS_BASE_BRANCH)",) \
-  --branch "$(BRANCH)" \
-  $(PUBLISH_ARGS)
-
-pr-preview: python/.venv/.installed
-	@test -n "$(BRANCH)" || (echo "[ERROR] BRANCH is required. Usage: make pr-preview BRANCH=docs/add-<slug>-connector-example-documentation" && exit 1)
-	@echo "→ Taking preview screenshots and creating PR for branch: $(BRANCH)"
-	$(_pr_preview_cmd)
-
-pr-preview-no-preview: python/.venv/.installed
-	@test -n "$(BRANCH)" || (echo "[ERROR] BRANCH is required." && exit 1)
-	@echo "→ Creating PR for branch (no preview): $(BRANCH)"
-	$(_pr_preview_cmd) --no-preview
-
-pr-preview-no-pr: python/.venv/.installed
-	@test -n "$(BRANCH)" || (echo "[ERROR] BRANCH is required." && exit 1)
-	@echo "→ Taking preview screenshots for branch (no PR): $(BRANCH)"
-	$(_pr_preview_cmd) --no-pr
-
-pr-preview-dry: python/.venv/.installed
-	@test -n "$(BRANCH)" || (echo "[ERROR] BRANCH is required." && exit 1)
-	@echo "→ Dry run for branch: $(BRANCH)"
-	$(_pr_preview_cmd) --dry-run
-
 # ── Batch docs (commit per connector → one PR) ────────────────────────────────
 # Commit one connector's artifacts to a shared branch, then create one PR for all.
 #
-# Named overrides for batch_commit_docs.py:
+# Named overrides for pipeline.py commit-docs / pr-docs:
 #   CATEGORY=<cat>          Override auto-detected connector category
 #   ARTIFACTS_DIR=<path>    Override artifacts directory (default: ./artifacts)
 #   DOCS_FORK=<owner/repo>  Override fork slug (default: inferred from git remote)
-#   BATCH_COMMIT_DOCS_ARGS  Extra flags forwarded verbatim to batch_commit_docs.py
-#   BATCH_PR_DOCS_ARGS      Extra flags forwarded verbatim to batch_pr_docs.py
+#   BATCH_COMMIT_DOCS_ARGS  Extra flags forwarded verbatim to pipeline.py commit-docs
+#   BATCH_PR_DOCS_ARGS      Extra flags forwarded verbatim to pipeline.py pr-docs
 #
 # Workflow:
 #   Run pipeline for connector A → make batch-commit-docs
@@ -255,7 +208,7 @@ DOCS_FORK ?=
 BATCH_COMMIT_DOCS_ARGS ?=
 BATCH_PR_DOCS_ARGS ?=
 
-_batch_commit_cmd = python/.venv/bin/python python/batch_commit_docs.py \
+_batch_commit_cmd = $(_pipeline_cmd) commit-docs \
   $(if $(DOCS_REPO),--docs-repo "$(DOCS_REPO)",) \
   $(if $(DOCS_FORK),--fork "$(DOCS_FORK)",) \
   $(if $(DOCS_UPSTREAM),--upstream "$(DOCS_UPSTREAM)",) \
@@ -265,7 +218,7 @@ _batch_commit_cmd = python/.venv/bin/python python/batch_commit_docs.py \
   $(if $(ARTIFACTS_DIR),--artifacts-dir "$(ARTIFACTS_DIR)",) \
   $(BATCH_COMMIT_DOCS_ARGS)
 
-_batch_pr_cmd = python/.venv/bin/python python/batch_pr_docs.py \
+_batch_pr_cmd = $(_pipeline_cmd) pr-docs \
   $(if $(DOCS_REPO),--docs-repo "$(DOCS_REPO)",) \
   $(if $(DOCS_FORK),--fork "$(DOCS_FORK)",) \
   $(if $(DOCS_UPSTREAM),--upstream "$(DOCS_UPSTREAM)",) \
@@ -292,8 +245,8 @@ batch-pr-docs-dry: python/.venv/.installed
 	$(_batch_pr_cmd) --dry-run
 
 # ── Publish sample ────────────────────────────────────────────────────────────
-# Defaults are read from .env by publish_sample.py.
-# Set these Makefile vars to override .env values for a single run.
+# Defaults are read from Config.toml by publish_sample.py.
+# Set these Makefile vars to override Config.toml values for a single run.
 # CODE_SERVER_PORT         — override code-server port
 # SAMPLES_REPO             — override integration-samples path
 # INTEGRATION_UPSTREAM     — GitHub org/repo for integration samples PRs
@@ -338,8 +291,8 @@ publish-sample-no-publish: python/.venv/.installed
 # Commit one sample to a shared branch, then create one PR for all.
 #
 # Named overrides:
-#   BATCH_COMMIT_SAMPLE_ARGS  Extra flags forwarded verbatim to batch_commit_sample.py
-#   BATCH_PR_SAMPLES_ARGS     Extra flags forwarded verbatim to batch_pr_samples.py
+#   BATCH_COMMIT_SAMPLE_ARGS  Extra flags forwarded verbatim to pipeline.py commit-sample
+#   BATCH_PR_SAMPLES_ARGS     Extra flags forwarded verbatim to pipeline.py pr-samples
 #   (CODE_SERVER_PORT, SAMPLES_REPO, PROJECT_PATH, INTEGRATION_UPSTREAM,
 #    INTEGRATION_BASE_BRANCH are shared with the publish-sample targets above)
 #
@@ -352,7 +305,7 @@ publish-sample-no-publish: python/.venv/.installed
 BATCH_COMMIT_SAMPLE_ARGS ?=
 BATCH_PR_SAMPLES_ARGS ?=
 
-_batch_commit_sample_cmd = python/.venv/bin/python python/batch_commit_sample.py \
+_batch_commit_sample_cmd = $(_pipeline_cmd) commit-sample \
   $(if $(CODE_SERVER_PORT),--url "http://localhost:$(CODE_SERVER_PORT)",) \
   $(if $(SAMPLES_REPO),--samples-repo "$(SAMPLES_REPO)",) \
   $(if $(PROJECT_PATH),--project-path "$(PROJECT_PATH)",) \
@@ -361,7 +314,7 @@ _batch_commit_sample_cmd = python/.venv/bin/python python/batch_commit_sample.py
   $(if $(BRANCH),--branch "$(BRANCH)",) \
   $(BATCH_COMMIT_SAMPLE_ARGS)
 
-_batch_pr_samples_cmd = python/.venv/bin/python python/batch_pr_samples.py \
+_batch_pr_samples_cmd = $(_pipeline_cmd) pr-samples \
   $(if $(SAMPLES_REPO),--samples-repo "$(SAMPLES_REPO)",) \
   $(if $(INTEGRATION_UPSTREAM),--upstream "$(INTEGRATION_UPSTREAM)",) \
   $(if $(INTEGRATION_BASE_BRANCH),--base-branch "$(INTEGRATION_BASE_BRANCH)",) \
@@ -392,49 +345,51 @@ BATCH_RUN_ARGS ?=
 
 batch-run: python/.venv/.installed
 	@echo "→ Running batch pipeline from $(BATCH_CONFIG)..."
-	python/.venv/bin/python python/batch_run.py --config "$(BATCH_CONFIG)" $(BATCH_RUN_ARGS)
+	$(_pipeline_cmd) batch-run --config "$(BATCH_CONFIG)" $(BATCH_RUN_ARGS)
 
 batch-run-dry: python/.venv/.installed
 	@echo "→ Batch pipeline dry run..."
-	python/.venv/bin/python python/batch_run.py --config "$(BATCH_CONFIG)" --dry-run $(BATCH_RUN_ARGS)
+	$(_pipeline_cmd) batch-run --config "$(BATCH_CONFIG)" --dry-run $(BATCH_RUN_ARGS)
 
-# ── Publish all (docs + sample) ───────────────────────────────────────────────
-# Reuses the same override vars as the individual publish targets.
-# Extra flags: PUBLISH_ALL_ARGS — forwarded verbatim to publish_all.py.
-
-PUBLISH_ALL_ARGS ?=
-
-_publish_all_cmd = python/.venv/bin/python python/publish_all.py \
+_pipeline_commit_cmd = $(_pipeline_cmd) commit \
   $(if $(DOCS_REPO),--docs-repo "$(DOCS_REPO)",) \
   $(if $(DOCS_UPSTREAM),--docs-upstream "$(DOCS_UPSTREAM)",) \
   $(if $(DOCS_BASE_BRANCH),--docs-base-branch "$(DOCS_BASE_BRANCH)",) \
+  --docs-branch "$(DOCS_BRANCH)" \
+  $(if $(CATEGORY),--category "$(CATEGORY)",) \
+  $(if $(ARTIFACTS_DIR),--artifacts-dir "$(ARTIFACTS_DIR)",) \
   $(if $(CODE_SERVER_PORT),--url "http://localhost:$(CODE_SERVER_PORT)",) \
   $(if $(SAMPLES_REPO),--samples-repo "$(SAMPLES_REPO)",) \
   $(if $(PROJECT_PATH),--project-path "$(PROJECT_PATH)",) \
   $(if $(INTEGRATION_UPSTREAM),--samples-upstream "$(INTEGRATION_UPSTREAM)",) \
   $(if $(INTEGRATION_BASE_BRANCH),--samples-base-branch "$(INTEGRATION_BASE_BRANCH)",) \
-  $(if $(NO_PR),--no-pr,) \
-  $(PUBLISH_ALL_ARGS)
+  --samples-branch "$(SAMPLES_BRANCH)"
 
-publish-all: python/.venv/.installed
-	@echo "→ Publishing docs + sample, showing both PR links..."
-	$(_publish_all_cmd)
+_pipeline_pr_cmd = $(_pipeline_cmd) pr \
+  $(if $(DOCS_REPO),--docs-repo "$(DOCS_REPO)",) \
+  $(if $(DOCS_UPSTREAM),--docs-upstream "$(DOCS_UPSTREAM)",) \
+  $(if $(DOCS_BASE_BRANCH),--docs-base-branch "$(DOCS_BASE_BRANCH)",) \
+  --docs-branch "$(DOCS_BRANCH)" \
+  $(if $(SAMPLES_REPO),--samples-repo "$(SAMPLES_REPO)",) \
+  $(if $(INTEGRATION_UPSTREAM),--samples-upstream "$(INTEGRATION_UPSTREAM)",) \
+  $(if $(INTEGRATION_BASE_BRANCH),--samples-base-branch "$(INTEGRATION_BASE_BRANCH)",) \
+  --samples-branch "$(SAMPLES_BRANCH)"
 
-publish-all-dry: python/.venv/.installed
-	@echo "→ Publishing docs + sample (dry run)..."
-	$(_publish_all_cmd) --dry-run
+pipeline-commit: python/.venv/.installed
+	@echo "→ Committing docs + sample to batch branches..."
+	$(_pipeline_commit_cmd)
 
-publish-all-no-preview: python/.venv/.installed
-	@echo "→ Publishing docs + sample (no Playwright preview)..."
-	$(_publish_all_cmd) --no-preview
+pipeline-commit-dry: python/.venv/.installed
+	@echo "→ Dry run: commit docs + sample to batch branches..."
+	$(_pipeline_commit_cmd) --dry-run
 
-publish-all-no-pr: python/.venv/.installed
-	@echo "→ Publishing docs + sample (branch + commit only, no PR)..."
-	$(_publish_all_cmd) --no-pr
+pipeline-pr: python/.venv/.installed
+	@echo "→ Creating docs + sample PRs from batch branches..."
+	$(_pipeline_pr_cmd)
 
-publish-all-open: python/.venv/.installed
-	@echo "→ Publishing docs + sample and opening PR links in browser..."
-	$(_publish_all_cmd) --open
+pipeline-pr-dry: python/.venv/.installed
+	@echo "→ Dry run: create docs + sample PRs from batch branches..."
+	$(_pipeline_pr_cmd) --dry-run
 
 # Aliases for backward compatibility
 cleanup: publish-sample

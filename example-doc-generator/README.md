@@ -27,33 +27,20 @@ Trigger mode supports all 15 WSO2 Integrator trigger types across three categori
 
 ## Setup
 
-**1. Create Config.toml** (Ballerina pipeline config)
+**1. Create Config.toml**
 
 ```bash
 cp Config.toml.example Config.toml
-# Fill in llmApiKey and userGoal
+# Fill in llmApiKey, docsIntegratorFork, and any local repo paths
 ```
 
-**2. Create .env** (Python scripts config)
-
-```bash
-cp .env.example .env
-# Fill in DOCS_INTEGRATOR_FORK and adjust any non-default values
-```
-
-**3. Export Anthropic API key** (required by the Python agent server)
-
-```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
-```
-
-**4. Install dependencies**
+**2. Install dependencies**
 
 ```bash
 make setup
 ```
 
-**5. Run the pipeline**
+**3. Run the pipeline**
 
 ```bash
 # Connector generation is the default:
@@ -76,41 +63,30 @@ Artifacts are saved under `artifacts/` (git-ignored).
 
 ## Configuration
 
-Configuration is split between two files:
+Configuration is kept in `Config.toml`. Copy `Config.toml.example` to get
+started. The Ballerina pipeline and Python scripts both read this file.
 
-### `Config.toml` — Ballerina pipeline
-
-Copy `Config.toml.example` to get started.
+Real environment variables can still override values for CI or one-off shell
+runs, but no `.env` file is required.
 
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
 | `llmApiKey` | ✅ | — | Anthropic API key for Ballerina AI calls |
 | `codeServerPort` | No | `8080` | Port for the code-server instance |
 | `agentServerPort` | No | `8765` | Port for the Python agent server |
+| `integrationSamplesRepo` | No | `../integration-samples` | Local path to integration-samples fork |
+| `docsIntegratorRepo` | No | `../docs-integrator` | Local path to docs-integrator fork |
+| `integrationSamplesUpstream` | No | `wso2/integration-samples` | GitHub org/repo for samples PRs |
+| `integrationSamplesBaseBranch` | No | `main` | Base branch for samples PRs |
+| `docsIntegratorFork` | ✅ for docs PRs | — | Your fork of docs-integrator (org/repo) |
+| `docsIntegratorUpstream` | No | `wso2/docs-integrator` | GitHub org/repo for docs PRs |
+| `docsIntegratorBaseBranch` | No | `main` | Base branch for docs PRs |
 
 > **Connector generation is the default:** pass the connector name with `make run CONNECTOR=mysql` or `bal run -- mysql`.
 
 > **Trigger generation uses `-t`:** pass trigger name/package with `make run TRIGGER=trigger.github PACKAGE=ballerinax/trigger.github` or `bal run -- -t trigger.github ballerinax/trigger.github`. Package defaults to `ballerinax/<name>` when omitted.
 
 > **Never commit `Config.toml`** — it is git-ignored.
-
-### `.env` — Python scripts
-
-Copy `.env.example` to get started. Used by `publish_docs.py`, `publish_sample.py`, and `agent_server.py`.
-
-| Key | Required | Default | Description |
-|-----|----------|---------|-------------|
-| `CODE_SERVER_PORT` | No | `8080` | code-server port |
-| `AGENT_SERVER_PORT` | No | `8765` | Agent server port |
-| `INTEGRATION_SAMPLES_REPO` | No | `../integration-samples` | Local path to integration-samples fork |
-| `DOCS_INTEGRATOR_REPO` | No | `../docs-integrator` | Local path to docs-integrator fork |
-| `INTEGRATION_SAMPLES_UPSTREAM` | No | `wso2/integration-samples` | GitHub org/repo for samples PRs |
-| `INTEGRATION_SAMPLES_BASE_BRANCH` | No | `main` | Base branch for samples PRs |
-| `DOCS_INTEGRATOR_FORK` | ✅ | — | Your fork of docs-integrator (org/repo) |
-| `DOCS_INTEGRATOR_UPSTREAM` | No | `wso2/docs-integrator` | GitHub org/repo for docs PRs |
-| `DOCS_INTEGRATOR_BASE_BRANCH` | No | `main` | Base branch for docs PRs |
-
-> **Never commit `.env`** — it is git-ignored.
 
 ## Project Structure
 
@@ -135,6 +111,7 @@ example-doc-generator/
 │
 ├── python/
 │   ├── agent_server.py             # aiohttp server wrapping Claude Agent SDK
+│   ├── pipeline.py                 # Unified batch-run, commit, and PR command surface
 │   ├── publish_sample.py           # Publishes integration sample PR + cleans workspace
 │   ├── publish_docs.py             # Publishes docs to docs-integrator fork + creates PR
 │   └── requirements.txt
@@ -168,6 +145,17 @@ Run
 Publish
   make publish-docs         Publish docs + create PR to docs-integrator
   make publish-docs-dry     Dry run — print planned actions, no changes
+
+Batch / Review
+  make batch-run            Run connector/trigger queue from batch_connectors.json
+  make batch-run-dry        Print planned queue execution, no changes
+  make pipeline-commit      Commit reviewed docs + sample to shared batch branches
+  make pipeline-pr          Create docs + sample PRs from shared batch branches
+
+Direct Python
+  python python/pipeline.py batch-run --config batch_connectors.json
+  python python/pipeline.py commit --docs-branch docs/batch --samples-branch samples/batch
+  python python/pipeline.py pr --docs-branch docs/batch --samples-branch samples/batch
 
 Screenshots
   make crop-screenshots     Crop UI chrome from all screenshots via Ballerina imagekit
@@ -246,7 +234,7 @@ Create a GitHub environment named **`docs-automation`** at **Settings → Enviro
 
 | Error | Fix |
 |-------|-----|
-| API key validation failed | Set `llmApiKey` in `Config.toml` and `export ANTHROPIC_API_KEY=...` |
+| API key validation failed | Set `llmApiKey` in `Config.toml` |
 | Claude Code CLI not found | Install from [claude.ai/code](https://claude.ai/code), verify with `claude --version` |
 | Agent server not ready | Run `make start-agent` to see Python errors; check `curl http://localhost:8765/health` |
 | `uv: command not found` | `curl -LsSf https://astral.sh/uv/install.sh \| sh && source ~/.zshrc` |

@@ -23,3 +23,12 @@ configurable string llmApiKey = ?;
 // === Service Ports ===
 configurable int codeServerPort = 8080;
 configurable int agentServerPort = 8765;
+
+// === Publish Repositories ===
+configurable string integrationSamplesRepo = "../integration-samples";
+configurable string docsIntegratorRepo = "../docs-integrator";
+configurable string integrationSamplesUpstream = "wso2/integration-samples";
+configurable string integrationSamplesBaseBranch = "main";
+configurable string docsIntegratorFork = "";
+configurable string docsIntegratorUpstream = "wso2/docs-integrator";
+configurable string docsIntegratorBaseBranch = "main";
