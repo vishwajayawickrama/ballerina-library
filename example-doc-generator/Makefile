@@ -148,14 +148,14 @@ run:
 		bal run -- $(CONNECTOR) $(if $(ADDITIONAL_INSTRUCTIONS),"$$ADDITIONAL_INSTRUCTIONS",); \
 	fi
 
-crop-screenshots: python/.venv/.installed
-	python/.venv/bin/python python/crop_screenshots.py
+crop-screenshots:
+	bal run -- crop-screenshots
 
-crop-screenshots-dry: python/.venv/.installed
-	python/.venv/bin/python python/crop_screenshots.py --dry-run
+crop-screenshots-dry:
+	bal run -- crop-screenshots dry-run
 
-crop-screenshots-backup: python/.venv/.installed
-	python/.venv/bin/python python/crop_screenshots.py --backup
+crop-screenshots-backup:
+	bal run -- crop-screenshots backup
 
 start-agent: python/.venv/.installed
 	@echo "→ Starting Python agent server (python/agent_server.py)..."

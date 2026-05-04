@@ -41,6 +41,20 @@ import wso2/example_doc_generator.utils;
 # + args - connector args by default, or trigger args after -t
 # + return                 - an error if any step fails
 public function main(string... args) returns error? {
+    if args.length() > 0 && args[0] == "crop-screenshots" {
+        boolean dryRun = false;
+        boolean backup = false;
+        foreach string arg in args {
+            if arg == "dry-run" {
+                dryRun = true;
+            } else if arg == "backup" {
+                backup = true;
+            }
+        }
+        check utils:cropScreenshots(dryRun, backup);
+        return;
+    }
+
     utils:log("=== WSO2 Integrator Documentation Pipeline ===");
     utils:log("");
 
@@ -313,22 +327,8 @@ public function main(string... args) returns error? {
 
     // Step 15: Crop UI chrome from screenshots produced by the agent
     utils:log("[STEP 15] Cropping screenshots...");
-    os:Process|error cropProc = os:exec({
-        value: "python/.venv/bin/python",
-        arguments: ["python/crop_screenshots.py"]
-    });
-    if cropProc is error {
-        utils:log("\t[WARN] Could not launch crop_screenshots.py: " + cropProc.message());
-        utils:log("\t[WARN] Run `make crop-screenshots` manually to crop screenshots.");
-    } else {
-        int exitCode = check cropProc.waitForExit();
-        if exitCode == 0 {
-            utils:log("\t[INFO] Screenshots cropped successfully.");
-        } else {
-            utils:log("\t[WARN] crop_screenshots.py exited with code " + exitCode.toString() + ".");
-            utils:log("\t[WARN] Run `make crop-screenshots` manually to crop screenshots.");
-        }
-    }
+    check utils:cropScreenshots();
+    utils:log("\t[INFO] Screenshots cropped successfully.");
     utils:log("");
 
     // ── Phase 5 (cont.): Finalise ─────────────────────────────────────────────

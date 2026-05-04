@@ -96,7 +96,7 @@ Copy `Config.toml.example` to get started.
 
 ### `.env` — Python scripts
 
-Copy `.env.example` to get started. Used by `publish_docs.py`, `publish_sample.py`, `agent_server.py`, and `crop_screenshots.py`.
+Copy `.env.example` to get started. Used by `publish_docs.py`, `publish_sample.py`, and `agent_server.py`.
 
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
@@ -135,7 +135,6 @@ example-doc-generator/
 │
 ├── python/
 │   ├── agent_server.py             # aiohttp server wrapping Claude Agent SDK
-│   ├── crop_screenshots.py         # Crops UI chrome from screenshots
 │   ├── publish_sample.py           # Publishes integration sample PR + cleans workspace
 │   ├── publish_docs.py             # Publishes docs to docs-integrator fork + creates PR
 │   └── requirements.txt
@@ -171,7 +170,7 @@ Publish
   make publish-docs-dry     Dry run — print planned actions, no changes
 
 Screenshots
-  make crop-screenshots     Crop UI chrome from all screenshots
+  make crop-screenshots     Crop UI chrome from all screenshots via Ballerina imagekit
   make crop-screenshots-dry Preview what would be cropped (no changes)
 
 Artifacts
