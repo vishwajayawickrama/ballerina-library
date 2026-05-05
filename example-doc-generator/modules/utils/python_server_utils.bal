@@ -38,12 +38,26 @@ public function checkAgentServerRunning(int port) returns boolean {
 # `cd python && uv run agent_server.py --port <port>` and waits until the
 # /health endpoint is reachable. The venv is expected at python/.venv.
 # + port - the port to bind the agent server to
+# + apiKey - the Anthropic API key to expose to the Python child process
+# + useApiKey - whether to pass ANTHROPIC_API_KEY to the Python child process
 # + return - an error if the server fails to start within the timeout
-public function startAgentServer(int port) returns error? {
-    os:Process|error proc = os:exec({
-        value: "sh",
-        arguments: ["-c", "cd python && uv run agent_server.py --port " + port.toString()]
-    });
+public function startAgentServer(int port, string apiKey, boolean useApiKey) returns error? {
+    string trimmedApiKey = apiKey.trim();
+    os:Process|error proc;
+    if useApiKey {
+        proc = os:exec(
+            {
+                value: "sh",
+                arguments: ["-c", "cd python && uv run agent_server.py --port " + port.toString()]
+            },
+            ANTHROPIC_API_KEY = trimmedApiKey
+        );
+    } else {
+        proc = os:exec({
+            value: "sh",
+            arguments: ["-c", "unset ANTHROPIC_API_KEY; cd python && uv run agent_server.py --port " + port.toString()]
+        });
+    }
     if proc is error {
         return error("Failed to start agent server: " + proc.message());
     }

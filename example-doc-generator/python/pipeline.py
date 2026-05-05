@@ -118,9 +118,29 @@ def save_state(state: dict[str, Any]) -> None:
     STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
 
 
-def archive_artifacts(slug: str, status: str) -> Path | None:
+def prepare_docs_metadata(artifacts_dir: Path, item_type: str) -> bool:
+    run_log_dir = artifacts_dir / "run-log"
+    connector_name_file = run_log_dir / "connector-name.txt"
+    if connector_name_file.exists():
+        return bool(connector_name_file.read_text(encoding="utf-8").strip())
+    if item_type != "trigger":
+        return False
+
+    trigger_name_file = run_log_dir / "trigger-name.txt"
+    if not trigger_name_file.exists():
+        return False
+    trigger_name = trigger_name_file.read_text(encoding="utf-8").strip()
+    if not trigger_name:
+        return False
+
+    connector_name_file.write_text(trigger_name, encoding="utf-8")
+    print(f"[INFO] Prepared trigger docs metadata at {connector_name_file.relative_to(ROOT)}")
+    return True
+
+
+def archive_artifacts(slug: str, status: str, item_type: str) -> tuple[Path | None, bool]:
     if not ARTIFACTS_DIR.exists():
-        return None
+        return None, False
     suffix = "" if status == "OK" else f"_{status}"
     dest = ARCHIVE_DIR / f"{slug}{suffix}"
     if dest.exists():
@@ -128,7 +148,10 @@ def archive_artifacts(slug: str, status: str) -> Path | None:
     ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
     shutil.move(str(ARTIFACTS_DIR), str(dest))
     print(f"[INFO] Archived artifacts to {dest.relative_to(ROOT)}")
-    return dest
+    docs_ready = status == "OK" and prepare_docs_metadata(dest, item_type)
+    if status == "OK" and not docs_ready:
+        print(f"[WARN] Docs metadata missing in {dest.relative_to(ROOT)}/run-log; commit-docs will be skipped.")
+    return dest, docs_ready
 
 
 def parse_run_cost(slug: str) -> dict[str, Any] | None:
@@ -152,13 +175,33 @@ def read_created_project_path() -> str | None:
     return path.read_text(encoding="utf-8").strip() if path.exists() else None
 
 
-def run_pipeline_item(item_type: str, name: str, instructions: str, package: str, timeout: int) -> bool:
+def build_pipeline_command(
+    item_type: str,
+    name: str,
+    instructions: str,
+    package: str,
+    use_agent_api_key: bool,
+) -> list[str]:
     key = "TRIGGER" if item_type == "trigger" else "CONNECTOR"
     cmd = ["make", "run", f"{key}={name}"]
+    if use_agent_api_key:
+        cmd.append("AGENT_API_KEY=1")
     if package:
         cmd.append(f"PACKAGE={package}")
     if instructions:
         cmd.append(f"ADDITIONAL_INSTRUCTIONS={instructions}")
+    return cmd
+
+
+def run_pipeline_item(
+    item_type: str,
+    name: str,
+    instructions: str,
+    package: str,
+    timeout: int,
+    use_agent_api_key: bool,
+) -> bool:
+    cmd = build_pipeline_command(item_type, name, instructions, package, use_agent_api_key)
     print(f"[CMD] {' '.join(cmd)}")
     try:
         return subprocess.run(cmd, cwd=str(ROOT), timeout=timeout).returncode == 0
@@ -212,7 +255,10 @@ def print_batch_summary(results: list[dict[str, Any]], config: dict[str, Any]) -
         for result in successful:
             archive_dir = result.get("archiveDir", f"artifacts_archive/{result['slug']}")
             out(f"# {result['name']}")
-            out(f"python python/pipeline.py commit-docs --artifacts-dir {archive_dir} --branch {docs_branch}")
+            if result.get("docsCommitReady", True):
+                out(f"python python/pipeline.py commit-docs --artifacts-dir {archive_dir} --branch {docs_branch}")
+            else:
+                out(f"# (docs metadata missing — check {archive_dir}/run-log/ before running commit-docs)")
             if result.get("projectPath"):
                 out(
                     "python python/pipeline.py commit-sample "
@@ -409,6 +455,7 @@ def run_batch(argv: Sequence[str]) -> None:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-resume", action="store_true")
     parser.add_argument("--create-prs", action="store_true")
+    parser.add_argument("--agent-api-key", action="store_true", help="Run the Python agent server with ANTHROPIC_API_KEY instead of subscription auth")
     parser.add_argument("--timeout", type=int, default=3600)
     args = parser.parse_args(argv)
 
@@ -430,8 +477,17 @@ def run_batch(argv: Sequence[str]) -> None:
                 print(f"     instructions: \"{item['instructions']}\"")
             if item.get("package"):
                 print(f"     package: \"{item['package']}\"")
+            cmd = build_pipeline_command(
+                item_type,
+                name,
+                item.get("instructions", ""),
+                item.get("package", ""),
+                args.agent_api_key,
+            )
+            print(f"     command: {' '.join(cmd)}")
         print(f"\nDocs branch:    {config['docsBranch']}")
         print(f"Samples branch: {config['samplesBranch']}")
+        print(f"Agent auth:     {'api-key' if args.agent_api_key else 'subscription'}")
         print(f"Timeout:        {args.timeout}s per item")
         print(f"Total:          {len(items)} items")
         return
@@ -449,6 +505,7 @@ def run_batch(argv: Sequence[str]) -> None:
     print(f"BATCH RUN — {len(items)} items queued")
     print(f"Docs branch:    {config['docsBranch']}")
     print(f"Samples branch: {config['samplesBranch']}")
+    print(f"Agent auth:     {'api-key' if args.agent_api_key else 'subscription'}")
     print("=" * 70)
 
     for i, item in enumerate(items, 1):
@@ -472,12 +529,13 @@ def run_batch(argv: Sequence[str]) -> None:
             item.get("instructions", ""),
             item.get("package", ""),
             args.timeout,
+            args.agent_api_key,
         )
         duration = time.time() - start
         cost_data = parse_run_cost(slugify(name))
         project_path = read_created_project_path()
         status = "OK" if success else "FAILED"
-        archive_path = archive_artifacts(slugify(name), status)
+        archive_path, docs_commit_ready = archive_artifacts(slugify(name), status, item_type)
         archive_rel = str(archive_path.relative_to(ROOT)) if archive_path else f"artifacts_archive/{slugify(name)}"
         result = {
             "name": name,
@@ -488,6 +546,7 @@ def run_batch(argv: Sequence[str]) -> None:
             "cost": cost_data["totalCostUsd"] if cost_data else None,
             "projectPath": project_path,
             "archiveDir": archive_rel,
+            "docsCommitReady": docs_commit_ready,
         }
         state["results"].append(result)
         state["completed" if success else "failed"].append(name)

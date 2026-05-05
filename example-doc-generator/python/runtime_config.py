@@ -20,11 +20,11 @@ ENV_TO_TOML = {
     "INTEGRATION_SAMPLES_BASE_BRANCH": "integrationSamplesBaseBranch",
     "INTEGRATION_SAMPLES_REPO": "integrationSamplesRepo",
     "INTEGRATION_SAMPLES_UPSTREAM": "integrationSamplesUpstream",
-    "LLM_API_KEY": "llmApiKey",
-    "ANTHROPIC_API_KEY": "llmApiKey",
 }
 
-TOML_TO_ENV = {toml_key: env_key for env_key, toml_key in ENV_TO_TOML.items()}
+TOML_ENV_ALIASES: dict[str, tuple[str, ...]] = {}
+for env_key, toml_key in ENV_TO_TOML.items():
+    TOML_ENV_ALIASES[toml_key] = (*TOML_ENV_ALIASES.get(toml_key, ()), env_key)
 
 
 def load_config() -> dict[str, Any]:
@@ -37,9 +37,9 @@ CONFIG = load_config()
 
 
 def get_str(key: str, default: str = "") -> str:
-    env_key = TOML_TO_ENV.get(key)
-    if env_key and os.environ.get(env_key):
-        return os.environ[env_key]
+    for env_key in TOML_ENV_ALIASES.get(key, ()):
+        if os.environ.get(env_key):
+            return os.environ[env_key]
     value = CONFIG.get(key)
     return default if value is None else str(value)
 

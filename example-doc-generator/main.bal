@@ -24,17 +24,18 @@ import wso2/example_doc_generator.ai_client;
 import wso2/example_doc_generator.prompts;
 import wso2/example_doc_generator.utils;
 
-
 # Entry point for the full automation pipeline.
 #
-# Phase 1  (Steps 1–2):  Pre-flight validation — API key and Claude Code CLI.
-# Phase 2  (Steps 3–6):  Infrastructure     — code-server, extension check, and Python agent server.
-# Phase 3  (Steps 7–10): Prompt generation  — build, call Claude, format, save.
-# Phase 4  (Steps 11–12): Agent execution   — run agent, enforce doc structure.
-# Phase 5  (Steps 13–16): Post-processing   — inject sections, crop screenshots, write run log.
+# Phase 1  (Steps 1–3):  Pre-flight validation — API key, agent auth mode, and Claude Code CLI.
+# Phase 2  (Steps 4–7):  Infrastructure     — code-server, extension check, and Python agent server.
+# Phase 3  (Steps 8–11): Prompt generation  — build, call Claude, format, save.
+# Phase 4  (Steps 12–13): Agent execution   — run agent, enforce doc structure.
+# Phase 5  (Steps 14–17): Post-processing   — inject sections, crop screenshots, write run log.
 #
 # Default mode is connector generation:
 #   bal run -- mysql
+# Agent API-key mode is opt-in:
+#   bal run -- --agent-api-key mysql
 # Trigger mode is explicit:
 #   bal run -- -t trigger.github ballerinax/trigger.github
 #
@@ -58,26 +59,46 @@ public function main(string... args) returns error? {
     utils:log("=== WSO2 Integrator Documentation Pipeline ===");
     utils:log("");
 
-    if args.length() == 0 {
-        return error("Usage: bal run -- <connector-name> [additional-instructions]\n" +
-                     "Trigger mode: bal run -- -t <trigger-name> [trigger-package] [additional-instructions]");
+    boolean useAgentApiKey = false;
+    string[] pipelineArgs = [];
+    foreach string arg in args {
+        if arg == "--agent-api-key" {
+            useAgentApiKey = true;
+        } else {
+            pipelineArgs.push(arg);
+        }
     }
 
-    boolean triggerMode = args[0] == "-t";
+    if pipelineArgs.length() == 0 {
+        return error("Usage: bal run -- [--agent-api-key] <connector-name> [additional-instructions]\n" +
+                     "Trigger mode: bal run -- [--agent-api-key] -t <trigger-name> [trigger-package] [additional-instructions]");
+    }
+
+    boolean triggerMode = pipelineArgs[0] == "-t";
     int firstValueIndex = triggerMode ? 1 : 0;
-    if args.length() <= firstValueIndex {
+    if pipelineArgs.length() <= firstValueIndex {
         return error("Missing " + (triggerMode ? "trigger" : "connector") + " name.");
     }
 
-    string targetName = args[firstValueIndex];
+    string targetName = pipelineArgs[firstValueIndex];
     string resolvedPackage = "";
     string additionalInstructions = "";
     if triggerMode {
-        string triggerPackage = args.length() > firstValueIndex + 1 ? args[firstValueIndex + 1] : "";
-        resolvedPackage = triggerPackage != "" ? triggerPackage : ("ballerinax/" + targetName);
-        additionalInstructions = args.length() > firstValueIndex + 2 ? args[firstValueIndex + 2] : "";
+        string defaultPackage = "ballerinax/" + targetName;
+        if pipelineArgs.length() > firstValueIndex + 1 {
+            string secondArg = pipelineArgs[firstValueIndex + 1];
+            if utils:isTriggerPackageArg(secondArg) {
+                resolvedPackage = secondArg;
+                additionalInstructions = pipelineArgs.length() > firstValueIndex + 2 ? pipelineArgs[firstValueIndex + 2] : "";
+            } else {
+                resolvedPackage = defaultPackage;
+                additionalInstructions = secondArg;
+            }
+        } else {
+            resolvedPackage = defaultPackage;
+        }
     } else {
-        additionalInstructions = args.length() > firstValueIndex + 1 ? args[firstValueIndex + 1] : "";
+        additionalInstructions = pipelineArgs.length() > firstValueIndex + 1 ? pipelineArgs[firstValueIndex + 1] : "";
     }
 
     time:Utc startTime = time:utcNow();
@@ -87,6 +108,7 @@ public function main(string... args) returns error? {
     if triggerMode {
         utils:log("[INFO] Package: " + resolvedPackage);
     }
+    utils:log("[INFO] Agent auth mode: " + (useAgentApiKey ? "api-key" : "subscription"));
     if additionalInstructions != "" {
         utils:log("[INFO] Additional instructions: " + additionalInstructions);
     }
@@ -100,11 +122,21 @@ public function main(string... args) returns error? {
 
     // Step 1: Validate Anthropic API key with a small ping before doing anything else
     utils:log("[STEP 1] Validating Anthropic API key...");
-    check ai_client:validateApiKey(llmApiKey);
+    check ai_client:validateApiKey(anthropicApiKey);
     utils:log("");
 
-    // Step 2: Check Claude Code CLI is installed (required for agent execution)
-    utils:log("[STEP 2] Checking if Claude Code CLI is installed...");
+    // Step 2: Choose agent auth mode. Ballerina direct API calls still use anthropicApiKey.
+    utils:log("[STEP 2] Selecting Python agent auth mode...");
+    utils:log("\t[INFO] Agent server auth mode: " + (useAgentApiKey ? "api-key" : "subscription"));
+    if useAgentApiKey {
+        utils:log("\t[INFO] ANTHROPIC_API_KEY will be passed only to the agent server process.");
+    } else {
+        utils:log("\t[INFO] ANTHROPIC_API_KEY will not be set by the pipeline for the agent server.");
+    }
+    utils:log("");
+
+    // Step 3: Check Claude Code CLI is installed (required for agent execution)
+    utils:log("[STEP 3] Checking if Claude Code CLI is installed...");
     boolean claudeInstalled = utils:checkClaudeCodeInstalled();
     if !claudeInstalled {
         return error("Claude Code CLI ('claude') is not installed or not on PATH. " +
@@ -115,8 +147,8 @@ public function main(string... args) returns error? {
 
     // ── Phase 2: Infrastructure ─────────────────────────────────────────────
 
-    // Step 3: Check if code-server binary is installed; install via official script if not
-    utils:log("[STEP 3] Checking if code-server is installed...");
+    // Step 4: Check if code-server binary is installed; install via official script if not
+    utils:log("[STEP 4] Checking if code-server is installed...");
     boolean codeServerBinaryInstalled = utils:checkCodeServerInstalled();
     if !codeServerBinaryInstalled {
         utils:log("\t[INFO] code-server not found. Installing via official script (curl -fsSL https://code-server.dev/install.sh | sh)...");
@@ -127,8 +159,8 @@ public function main(string... args) returns error? {
     }
     utils:log("");
 
-    // Step 4: Verify code-server is running on the configured port, start if needed
-    utils:log("[STEP 4] Verifying code-server on port " + codeServerPort.toString() + "...");
+    // Step 5: Verify code-server is running on the configured port, start if needed
+    utils:log("[STEP 5] Verifying code-server on port " + codeServerPort.toString() + "...");
     boolean codeServerRunning = utils:checkCodeServerRunning(codeServerPort);
     if !codeServerRunning {
         utils:log("\t[INFO] Code-server not running. Starting code-server...");
@@ -141,8 +173,8 @@ public function main(string... args) returns error? {
     utils:log("\t[INFO] Code-server URL: " + codeServerUrl);
     utils:log("");
 
-    // Step 5: Ensure the WSO2 Integrator extension is installed in code-server
-    utils:log("[STEP 5] Checking WSO2 Integrator extension (wso2.wso2-integrator)...");
+    // Step 6: Ensure the WSO2 Integrator extension is installed in code-server
+    utils:log("[STEP 6] Checking WSO2 Integrator extension (wso2.wso2-integrator)...");
     boolean extInstalled = utils:checkExtensionInstalled("wso2.wso2-integrator");
     if !extInstalled {
         utils:log("\t[INFO] Extension not found. Installing from marketplace...");
@@ -153,15 +185,15 @@ public function main(string... args) returns error? {
     }
     utils:log("");
 
-    // Step 6: Check if the Python agent server is running; start it if not
-    utils:log("[STEP 6] Checking Python agent server on port " + agentServerPort.toString() + "...");
+    // Step 7: Check if the Python agent server is running; start it if not
+    utils:log("[STEP 7] Checking Python agent server on port " + agentServerPort.toString() + "...");
     boolean agentRunning = utils:checkAgentServerRunning(agentServerPort);
     if !agentRunning {
         utils:log("\t[INFO] Agent server not running. Starting via `uv run agent_server.py`...");
-        check utils:startAgentServer(agentServerPort);
+        check utils:startAgentServer(agentServerPort, anthropicApiKey, useAgentApiKey);
         utils:log("\t[INFO] Agent server started.");
     } else {
-        utils:log("\t[INFO] Agent server is already running.");
+        utils:log("\t[INFO] Agent server is already running. Restart it to change agent auth mode.");
     }
     string agentUrl = "http://localhost:" + agentServerPort.toString();
     utils:log("\t[INFO] Agent server URL: " + agentUrl);
@@ -197,8 +229,8 @@ public function main(string... args) returns error? {
     utils:log("\t[INFO] " + (triggerMode ? "Trigger" : "Connector") + " name saved to " + runLogDir + "/" + nameFile);
     utils:log("");
 
-    // Step 7: Build system and user prompts
-    utils:log("[STEP 7] Building system and user prompts...");
+    // Step 8: Build system and user prompts
+    utils:log("[STEP 8] Building system and user prompts...");
     string|error cwdResult = file:getCurrentDir();
     string projectRoot = cwdResult is string ? cwdResult : os:getEnv("PWD");
     string systemPrompt = triggerMode ?
@@ -208,14 +240,14 @@ public function main(string... args) returns error? {
         prompts:buildTriggerUserMessage(targetName, resolvedPackage, codeServerUrl, projectRoot, additionalInstructions) :
         prompts:buildUserMessage(targetName, codeServerUrl, projectRoot, additionalInstructions);
 
-    // Step 8: Call Anthropic API to generate the execution prompt
-    utils:log("[STEP 8] Calling Anthropic API to generate execution prompt...");
-    ai_client:LlmResult promptResult = check ai_client:callClaude(systemPrompt, userMessage, llmApiKey);
+    // Step 9: Call Anthropic API to generate the execution prompt
+    utils:log("[STEP 9] Calling Anthropic API to generate execution prompt...");
+    ai_client:LlmResult promptResult = check ai_client:callClaude(systemPrompt, userMessage, anthropicApiKey);
     string executionPrompt = promptResult.text;
     promptGenUsage = promptResult.usage;
 
-    // Step 9: Add header to the generated prompt
-    utils:log("[STEP 9] Formatting execution prompt...");
+    // Step 10: Add header to the generated prompt
+    utils:log("[STEP 10] Formatting execution prompt...");
     string header = string `# Execution Prompt
 
 <!-- ============================================================
@@ -230,18 +262,18 @@ public function main(string... args) returns error? {
 `;
     string fullPrompt = header + executionPrompt;
 
-    // Step 10: Save to file — returns the path used for the agent in Step 11
-    utils:log("[STEP 10] Saving execution prompt to " + utils:OUTPUT_DIR + "...");
+    // Step 11: Save to file — returns the path used for the agent in Step 12
+    utils:log("[STEP 11] Saving execution prompt to " + utils:OUTPUT_DIR + "...");
     string promptPath = check utils:saveExecutionPrompt(fullPrompt, goalSlug);
     utils:log("\t[INFO] Saved to: " + promptPath);
     utils:log("");
 
     // ── Phase 4: Agent execution ─────────────────────────────────────────────
 
-    // Step 11: Submit the execution prompt to the agent server and stream logs.
+    // Step 12: Submit the execution prompt to the agent server and stream logs.
     // If the agent returns a near-empty result (e.g. < 3 turns and no workflow doc
     // written — typically a meta-confusion refusal), retry once before moving on.
-    utils:log("[STEP 11] Running Claude agent...");
+    utils:log("[STEP 12] Running Claude agent...");
     agent_client:AgentCost? agentCost = check agent_client:runClaudeAgent(promptPath, agentUrl);
 
     string workflowDocsDirCheck = "./artifacts/workflow-docs";
@@ -270,11 +302,11 @@ public function main(string... args) returns error? {
 
     // ── Phase 5: Post-processing ──────────────────────────────────────────────
 
-    // Step 12: Enforce documentation structure via a dedicated Claude API call.
+    // Step 13: Enforce documentation structure via a dedicated Claude API call.
     // The agent writes the doc with all browser-automation context in its window;
     // rules stated early in the system prompt get buried. This call has the rules
     // fresh in context with no other noise, so they are reliably applied.
-    utils:log("[STEP 12] Enforcing documentation structure...");
+    utils:log("[STEP 13] Enforcing documentation structure...");
     string workflowDocsDir = "./artifacts/workflow-docs";
     string enforcedDocPath = "";
     file:MetaData[]|file:Error dirEntries = file:readDir(workflowDocsDir);
@@ -298,7 +330,7 @@ public function main(string... args) returns error? {
             }
             enforcedDocPath = docPath;
             string enforcementSystemPrompt = prompts:buildDocEnforcementSystemPrompt();
-            ai_client:LlmResult enfResult = check ai_client:callClaude(enforcementSystemPrompt, rawDoc, llmApiKey);
+            ai_client:LlmResult enfResult = check ai_client:callClaude(enforcementSystemPrompt, rawDoc, anthropicApiKey);
             io:Error? writeErr = io:fileWriteString(docPath, enfResult.text);
             if writeErr is io:Error {
                 return error("Could not write enforced doc: " + writeErr.message());
@@ -311,22 +343,22 @@ public function main(string... args) returns error? {
     }
     utils:log("");
 
-    // Step 13: Append the "Try it yourself" section (Devant button + GitHub
+    // Step 14: Append the "Try it yourself" section (Devant button + GitHub
     // source link). Runs AFTER enforcement so the enforcement prompt's fixed
     // section list does not strip the appended H2.
-    utils:log("[STEP 13] Injecting 'Try it yourself' section into workflow doc...");
+    utils:log("[STEP 14] Injecting 'Try it yourself' section into workflow doc...");
     utils:injectTryItYourselfSection(enforcedDocPath);
     utils:log("");
 
-    // Step 14: Connector docs also get a Ballerina Central examples link.
+    // Step 15: Connector docs also get a Ballerina Central examples link.
     if !triggerMode {
-        utils:log("[STEP 14] Checking Ballerina Central for connector examples link...");
+        utils:log("[STEP 15] Checking Ballerina Central for connector examples link...");
         utils:appendExamplesSection(enforcedDocPath);
         utils:log("");
     }
 
-    // Step 15: Crop UI chrome from screenshots produced by the agent
-    utils:log("[STEP 15] Cropping screenshots...");
+    // Step 16: Crop UI chrome from screenshots produced by the agent
+    utils:log("[STEP 16] Cropping screenshots...");
     check utils:cropScreenshots();
     utils:log("\t[INFO] Screenshots cropped successfully.");
     utils:log("");
@@ -351,8 +383,8 @@ public function main(string... args) returns error? {
     }
     decimal totalCombinedCostUsd = totalCostUsd + agentCostUsd;
 
-    // Step 16: Write run log to artifacts/run-log/
-    utils:log("[STEP 16] Writing run log...");
+    // Step 17: Write run log to artifacts/run-log/
+    utils:log("[STEP 17] Writing run log...");
     utils:writeRunLog({
         mode:                    triggerMode ? "trigger" : "connector",
         connectorName:           triggerMode ? () : targetName,

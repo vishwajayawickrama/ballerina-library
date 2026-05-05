@@ -24,6 +24,7 @@ help:
 	@echo "  Run"
 	@echo "    make run CONNECTOR=mysql                                                     Run the full pipeline for a connector"
 	@echo "    make run CONNECTOR=mysql ADDITIONAL_INSTRUCTIONS='...'                       Run with per-connector guidance"
+	@echo "    make run CONNECTOR=mysql AGENT_API_KEY=1                                     Run agent server with Anthropic API-key auth"
 	@echo "    make run TRIGGER=trigger.github                                              Run the full pipeline for a trigger (-t)"
 	@echo "    make run TRIGGER=trigger.github PACKAGE=ballerinax/trigger.github            Run trigger mode with explicit package path"
 	@echo "    make start-agent      Start the Python agent server in the foreground"
@@ -75,7 +76,7 @@ help:
 	@echo ""
 	@echo "  Batch Run (queue multiple connectors/triggers sequentially)"
 	@echo "    BATCH_CONFIG=path.json            Override config file (default: batch_connectors.json)"
-	@echo "    BATCH_RUN_ARGS='--no-resume'      Extra flags: --no-resume, --create-prs, --timeout N"
+	@echo "    BATCH_RUN_ARGS='--no-resume'      Extra flags: --no-resume, --create-prs, --agent-api-key, --timeout N"
 	@echo "    Workflow: 1) make batch-run  2) review artifacts_archive/  3) commit approved items"
 	@echo "              4) make pipeline-pr"
 	@echo ""
@@ -121,6 +122,8 @@ setup-bal:
 # ── Run ──────────────────────────────────────────────────────────────────────
 
 AGENT_SERVER_PORT ?= 8765
+AGENT_API_KEY ?=
+AGENT_AUTH_ARG = $(if $(filter 1 true TRUE yes YES,$(AGENT_API_KEY)),--agent-api-key,)
 ADDITIONAL_INSTRUCTIONS ?=
 PACKAGE ?=
 export ADDITIONAL_INSTRUCTIONS
@@ -129,10 +132,10 @@ run:
 	@[ "$(CONNECTOR)$(TRIGGER)" ] || { echo "Usage: make run CONNECTOR=mysql OR make run TRIGGER=trigger.github [PACKAGE=ballerinax/trigger.github]"; exit 1; }
 	@if [ -n "$(TRIGGER)" ]; then \
 		echo "→ Running full pipeline for trigger: $(TRIGGER)$(if $(PACKAGE), (package: $(PACKAGE)),)$(if $(ADDITIONAL_INSTRUCTIONS), (with additional instructions),)"; \
-		bal run -- -t $(TRIGGER) $(if $(PACKAGE),"$(PACKAGE)",) $(if $(ADDITIONAL_INSTRUCTIONS),"$$ADDITIONAL_INSTRUCTIONS",); \
+		bal run -- $(AGENT_AUTH_ARG) -t $(TRIGGER) "$(if $(PACKAGE),$(PACKAGE),ballerinax/$(TRIGGER))" $(if $(ADDITIONAL_INSTRUCTIONS),"$$ADDITIONAL_INSTRUCTIONS",); \
 	else \
 		echo "→ Running full pipeline for connector: $(CONNECTOR)$(if $(ADDITIONAL_INSTRUCTIONS), (with additional instructions),)"; \
-		bal run -- $(CONNECTOR) $(if $(ADDITIONAL_INSTRUCTIONS),"$$ADDITIONAL_INSTRUCTIONS",); \
+		bal run -- $(AGENT_AUTH_ARG) $(CONNECTOR) $(if $(ADDITIONAL_INSTRUCTIONS),"$$ADDITIONAL_INSTRUCTIONS",); \
 	fi
 
 crop-screenshots:

@@ -5,9 +5,10 @@
 #   cp Config.toml.example Config.toml
 # =============================================================================
 
-# Anthropic API Key (required — get yours at https://console.anthropic.com/settings/api-keys)
-# This is also used by the Python agent server as ANTHROPIC_API_KEY.
-llmApiKey = ""
+# Anthropic API key (required for Ballerina prompt generation and doc enforcement).
+# The Python agent server uses Claude subscription auth by default; pass
+# --agent-api-key or AGENT_API_KEY=1 to forward this key as ANTHROPIC_API_KEY.
+anthropicApiKey = ""
 
 # Code-Server port (code-server runs locally on this port)
 # The pipeline will verify code-server is running and start it if needed.

@@ -39,15 +39,11 @@ import os
 import uuid
 from pathlib import Path
 
-from runtime_config import get_int, get_str
+from runtime_config import get_int
 
 # Unset CLAUDECODE so the SDK can spawn a Claude Code subprocess even when
 # this server is launched from within an active Claude Code session.
 os.environ.pop("CLAUDECODE", None)
-if not os.environ.get("ANTHROPIC_API_KEY"):
-    llm_api_key = get_str("llmApiKey", "")
-    if llm_api_key:
-        os.environ["ANTHROPIC_API_KEY"] = llm_api_key
 
 from aiohttp import web
 from claude_agent_sdk import (

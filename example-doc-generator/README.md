@@ -31,7 +31,7 @@ Trigger mode supports all 15 WSO2 Integrator trigger types across three categori
 
 ```bash
 cp Config.toml.example Config.toml
-# Fill in llmApiKey, docsIntegratorFork, and any local repo paths
+# Fill in anthropicApiKey, docsIntegratorFork, and any local repo paths
 ```
 
 **2. Install dependencies**
@@ -64,14 +64,17 @@ Artifacts are saved under `artifacts/` (git-ignored).
 ## Configuration
 
 Configuration is kept in `Config.toml`. Copy `Config.toml.example` to get
-started. The Ballerina pipeline and Python scripts both read this file.
+started. The Ballerina pipeline reads this file first, validates
+`anthropicApiKey`, and uses it for direct Anthropic API calls during prompt
+generation and doc enforcement.
 
-Real environment variables can still override values for CI or one-off shell
-runs, but no `.env` file is required.
+Real environment variables can still be used by standalone Python scripts for
+CI or one-off shell runs, but no `.env` file is required for the Ballerina
+pipeline.
 
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
-| `llmApiKey` | ✅ | — | Anthropic API key for Ballerina AI calls |
+| `anthropicApiKey` | ✅ | — | Anthropic API key for all Claude calls |
 | `codeServerPort` | No | `8080` | Port for the code-server instance |
 | `agentServerPort` | No | `8765` | Port for the Python agent server |
 | `integrationSamplesRepo` | No | `../integration-samples` | Local path to integration-samples fork |
@@ -85,6 +88,8 @@ runs, but no `.env` file is required.
 > **Connector generation is the default:** pass the connector name with `make run CONNECTOR=mysql` or `bal run -- mysql`.
 
 > **Trigger generation uses `-t`:** pass trigger name/package with `make run TRIGGER=trigger.github PACKAGE=ballerinax/trigger.github` or `bal run -- -t trigger.github ballerinax/trigger.github`. Package defaults to `ballerinax/<name>` when omitted.
+
+> **Agent auth defaults to Claude subscription:** the Python agent server does not receive `ANTHROPIC_API_KEY` unless you opt in with `bal run -- --agent-api-key mysql` or `make run CONNECTOR=mysql AGENT_API_KEY=1`. If the agent server is already running, restart it before changing auth mode.
 
 > **Never commit `Config.toml`** — it is git-ignored.
 
@@ -137,6 +142,7 @@ Setup
 Run
   make run CONNECTOR=mysql                               Run the full pipeline for a connector
   make run CONNECTOR=mysql ADDITIONAL_INSTRUCTIONS='...' Run with per-connector guidance
+  make run CONNECTOR=mysql AGENT_API_KEY=1               Run agent server with Anthropic API-key auth
   make run TRIGGER=trigger.github                        Run the full pipeline for a trigger (-t)
   make run TRIGGER=http PACKAGE=ballerina/http           Run trigger mode with explicit package path
   make start-agent          Start the Python agent server in the foreground
@@ -154,6 +160,7 @@ Batch / Review
 
 Direct Python
   python python/pipeline.py batch-run --config batch_connectors.json
+  python python/pipeline.py batch-run --config batch_connectors.json --agent-api-key
   python python/pipeline.py commit --docs-branch docs/batch --samples-branch samples/batch
   python python/pipeline.py pr --docs-branch docs/batch --samples-branch samples/batch
 
@@ -172,11 +179,11 @@ Run `make help` for the full list with configurable variables.
 
 | Phase | Steps | Description |
 |-------|-------|-------------|
-| Pre-flight | 1–2 | Validate API key; check Claude Code CLI is installed |
-| Infrastructure | 3–6 | Install/start code-server; install WSO2 Integrator from marketplace; install/start Python agent server |
-| Prompt generation | 7–10 | Build prompts → call Claude → format → save execution prompt |
-| Agent execution | 11 | POST prompt to agent server; stream logs until done |
-| Post-processing | 12–14 | Enforce doc structure; crop screenshots; write run log |
+| Pre-flight | 1–3 | Validate API key; choose agent auth mode; check Claude Code CLI |
+| Infrastructure | 4–7 | Install/start code-server; install WSO2 Integrator from marketplace; install/start Python agent server |
+| Prompt generation | 8–11 | Build prompts → call Claude → format → save execution prompt |
+| Agent execution | 12 | POST prompt to agent server; stream logs until done |
+| Post-processing | 13–17 | Enforce doc structure; inject final sections; crop screenshots; write run log |
 
 ## Python Agent Server
 
@@ -210,7 +217,7 @@ Add these under **Settings → Environments → `docs-automation` → Secrets**:
 
 | Secret | Description |
 |--------|-------------|
-| `LLM_API_KEY` | Anthropic API key — used for all Claude calls |
+| `ANTHROPIC_API_KEY` | Anthropic API key — used for all Claude calls |
 | `DOCS_INTEGRATOR_TOKEN` | GitHub PAT with `repo` scope — used to push branches to your docs-integrator fork and open PRs against the upstream |
 
 ### Required Environment
@@ -234,7 +241,7 @@ Create a GitHub environment named **`docs-automation`** at **Settings → Enviro
 
 | Error | Fix |
 |-------|-----|
-| API key validation failed | Set `llmApiKey` in `Config.toml` |
+| API key validation failed | Set `anthropicApiKey` in `Config.toml` |
 | Claude Code CLI not found | Install from [claude.ai/code](https://claude.ai/code), verify with `claude --version` |
 | Agent server not ready | Run `make start-agent` to see Python errors; check `curl http://localhost:8765/health` |
 | `uv: command not found` | `curl -LsSf https://astral.sh/uv/install.sh \| sh && source ~/.zshrc` |
