@@ -5,7 +5,8 @@
 #   cp Config.toml.example Config.toml
 # =============================================================================
 
-# Anthropic API Key (required — get yours at https://console.anthropic.com/settings/api-keys)
+# Anthropic API key for Ballerina AI calls.
+# python/agent_server.py reads ANTHROPIC_API_KEY from .env.
 llmApiKey = ""
 
 # Code-Server port (code-server runs locally on this port)
@@ -25,4 +26,3 @@ agentServerPort = 8765
 # Leave empty or omit to use defaults.
 # Example: additionalInstructions = "Use BearerTokenConfig for authentication. The token field maps to the Zoom API Bearer token."
 # additionalInstructions = ""
-

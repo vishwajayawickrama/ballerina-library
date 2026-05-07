@@ -34,15 +34,15 @@ public function checkAgentServerRunning(int port) returns boolean {
     return exitCode is int && exitCode == 0;
 }
 
-# Starts the Python agent server on the given port using
-# `cd python && uv run agent_server.py --port <port>` and waits until the
-# /health endpoint is reachable. The venv is expected at python/.venv.
+# Starts the Python agent server on the given port using the project venv and
+# waits until the /health endpoint is reachable. The venv is expected at
+# python/.venv.
 # + port - the port to bind the agent server to
 # + return - an error if the server fails to start within the timeout
 public function startAgentServer(int port) returns error? {
     os:Process|error proc = os:exec({
         value: "sh",
-        arguments: ["-c", "cd python && uv run agent_server.py --port " + port.toString()]
+        arguments: ["-c", "cd python && .venv/bin/python agent_server.py --port " + port.toString()]
     });
     if proc is error {
         return error("Failed to start agent server: " + proc.message());

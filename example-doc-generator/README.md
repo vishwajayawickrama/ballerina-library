@@ -31,29 +31,23 @@ Trigger mode supports all 15 WSO2 Integrator trigger types across three categori
 
 ```bash
 cp Config.toml.example Config.toml
-# Fill in llmApiKey and userGoal
+# Fill in llmApiKey
 ```
 
-**2. Create .env** (Python scripts config)
+**2. Create .env** (Python scripts and agent server config)
 
 ```bash
 cp .env.example .env
-# Fill in DOCS_INTEGRATOR_FORK and adjust any non-default values
+# Fill in ANTHROPIC_API_KEY, DOCS_INTEGRATOR_FORK, and any non-default values
 ```
 
-**3. Export Anthropic API key** (required by the Python agent server)
-
-```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
-```
-
-**4. Install dependencies**
+**3. Install dependencies**
 
 ```bash
 make setup
 ```
 
-**5. Run the pipeline**
+**4. Run the pipeline**
 
 ```bash
 # Connector generation is the default:
@@ -100,6 +94,7 @@ Copy `.env.example` to get started. Used by `publish_docs.py`, `publish_sample.p
 
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
+| `ANTHROPIC_API_KEY` | ✅ | — | Anthropic API key for `python/agent_server.py` / Claude Agent SDK |
 | `CODE_SERVER_PORT` | No | `8080` | code-server port |
 | `AGENT_SERVER_PORT` | No | `8765` | Agent server port |
 | `INTEGRATION_SAMPLES_REPO` | No | `../integration-samples` | Local path to integration-samples fork |
@@ -246,7 +241,7 @@ Create a GitHub environment named **`docs-automation`** at **Settings → Enviro
 
 | Error | Fix |
 |-------|-----|
-| API key validation failed | Set `llmApiKey` in `Config.toml` and `export ANTHROPIC_API_KEY=...` |
+| API key validation failed | Set `llmApiKey` in `Config.toml` and `ANTHROPIC_API_KEY` in `.env` |
 | Claude Code CLI not found | Install from [claude.ai/code](https://claude.ai/code), verify with `claude --version` |
 | Agent server not ready | Run `make start-agent` to see Python errors; check `curl http://localhost:8765/health` |
 | `uv: command not found` | `curl -LsSf https://astral.sh/uv/install.sh \| sh && source ~/.zshrc` |

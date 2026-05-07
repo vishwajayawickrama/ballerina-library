@@ -41,7 +41,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).parent.parent / ".env")
+PROJECT_ROOT = Path(__file__).parent.parent
+ENV_PATH = PROJECT_ROOT / ".env"
+
+load_dotenv(ENV_PATH)
 
 # Unset CLAUDECODE so the SDK can spawn a Claude Code subprocess even when
 # this server is launched from within an active Claude Code session.
@@ -58,7 +61,7 @@ from claude_agent_sdk import (
 )
 
 # CWD for the Claude agent is the project root (one level above this file)
-CWD = str(Path(__file__).parent.parent)
+CWD = str(PROJECT_ROOT)
 
 jobs: dict[str, dict] = {}
 running_tasks: set[asyncio.Task] = set()
@@ -92,20 +95,16 @@ async def run_agent(job_id: str, prompt_path: str) -> None:
     try:
         raw = Path(prompt_path).read_text()
         prompt = (
-            "Execute the workflow defined in the execution prompt below end-to-end. "
-            "Follow every stage in order, call the required Playwright MCP tools to "
-            "drive the WSO2 Integrator UI in code-server, capture every mandatory "
-            "screenshot (exactly 7: _01_artifact_palette, _02_trigger_config_form, "
-            "_03_configurations_panel, _04_add_handler_panel, "
-            "_05_message_define_value, _06_handler_flow, _07_service_view_final), "
-            "and write the final workflow document to artifacts/workflow-docs/. "
-            "Debug captures must go to /tmp/, never to artifacts/screenshots/. "
-            "Verify the expected anchor element is visible via browser_snapshot "
-            "BEFORE every browser_take_screenshot call. If the user message's "
-            "ADDITIONAL INSTRUCTIONS block specifies an alternate source surface "
-            "for any screenshot slot (e.g. for triggers without a literal Add "
-            "Handler side panel or Define Value modal), follow that override "
-            "exactly. Do NOT ask for confirmation — begin immediately with Stage 1.\n\n---\n\n"
+            "Execute the workflow defined in the execution prompt below end-to-end "
+            "for the requested WSO2 Integrator connector or trigger. Follow each "
+            "stage in order, use the required Playwright MCP tools to drive the "
+            "UI in code-server, capture every mandatory screenshot specified by "
+            "the prompt, and write the final workflow document to "
+            "artifacts/workflow-docs/. Debug captures must go to /tmp/, never to "
+            "artifacts/screenshots/. Before each browser_take_screenshot call, "
+            "verify the expected anchor element is visible via browser_snapshot. "
+            "Follow any ADDITIONAL INSTRUCTIONS overrides exactly. Do not ask for "
+            "confirmation; begin immediately with Stage 1.\n\n---\n\n"
             + raw
         )
 
@@ -144,6 +143,9 @@ async def run_agent(job_id: str, prompt_path: str) -> None:
                     "mcp__playwright__browser_install",
                     "mcp__playwright__browser_console_messages",
                     "mcp__playwright__browser_network_requests",
+                ],
+                disallowed_tools=[
+                    "Task",
                 ],
                 mcp_servers={
                     "playwright": {
