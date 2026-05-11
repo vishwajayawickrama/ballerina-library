@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Queue orchestrator for batch connector documentation generation.
+"""Queue orchestrator for batch documentation generation.
 
-Reads a connector list from a JSON config file, runs the existing
-single-connector pipeline sequentially for each, archives artifacts
-per connector, and prints a summary with commit instructions.
+Reads connector and trigger entries from a JSON config file, runs the existing
+single-item pipeline sequentially for each, archives artifacts per item, and
+prints a summary with follow-up instructions.
 
 Usage:
     python batch_run.py --config batch_connectors.json
     python batch_run.py --dry-run
     python batch_run.py --no-resume          # ignore saved state, start fresh
-    python batch_run.py --create-prs         # create PRs after all connectors done
-    python batch_run.py --timeout 5400       # 90 min per connector
+    python batch_run.py --create-prs         # create connector PRs after all runs
+    python batch_run.py --timeout 5400       # 90 min per item
 """
 
 from __future__ import annotations
@@ -54,6 +54,22 @@ def slugify(name: str) -> str:
     return s
 
 
+def item_kind(item: dict) -> str:
+    """Return connector or trigger; connector is the backward-compatible default."""
+    kind = str(item.get("type", "connector")).strip().lower()
+    if kind not in {"connector", "trigger"}:
+        fail(f"Unsupported item type '{kind}' for {item.get('name', '<unknown>')}. Use 'connector' or 'trigger'.")
+    return kind
+
+
+def artifact_slug(name: str, kind: str) -> str:
+    """Mirror main.bal artifact slug derivation for archive/run-log lookup."""
+    slug = slugify(name)
+    if kind == "trigger":
+        return slug.replace(".", "_")
+    return slug
+
+
 def config_hash(config: dict) -> str:
     """SHA-256 of the connectors list for change detection."""
     payload = json.dumps(config["connectors"], sort_keys=True)
@@ -85,6 +101,8 @@ def load_config(path: Path) -> dict:
     for i, c in enumerate(data["connectors"]):
         if not isinstance(c, dict) or "name" not in c:
             fail(f"connectors[{i}] must be an object with a 'name' field.")
+        if item_kind(c) == "trigger" and not c.get("package"):
+            fail(f"connectors[{i}] is a trigger and must include a 'package' field.")
 
     data.setdefault("docsBranch", "docs/connector-docs")
     data.setdefault("samplesBranch", "samples/connector-samples")
@@ -153,13 +171,13 @@ def archive_artifacts(slug: str, status: str) -> Path | None:
 # Run-log parsing
 # ---------------------------------------------------------------------------
 
-def parse_run_cost(slug: str) -> dict | None:
+def parse_run_cost(slug: str, kind: str) -> dict | None:
     """Read the latest run-log JSON for cost/duration data."""
     run_log_dir = ARTIFACTS_DIR / "run-log"
     if not run_log_dir.exists():
         return None
 
-    goal_slug = slug + "-connector-example"
+    goal_slug = slug + ("-trigger-example" if kind == "trigger" else "-connector-example")
     logs = sorted(run_log_dir.glob(f"{goal_slug}_*.json"), key=lambda p: p.stat().st_mtime)
     if not logs:
         return None
@@ -184,9 +202,19 @@ def read_created_project_path() -> str | None:
 # Pipeline execution
 # ---------------------------------------------------------------------------
 
-def run_pipeline(name: str, instructions: str, timeout: int) -> bool:
-    """Run `make run CONNECTOR=<name>` and return True on success."""
-    cmd = ["make", "run", f"CONNECTOR={name}"]
+def run_pipeline(item: dict, instructions: str, timeout: int) -> bool:
+    """Run the make target for one connector or trigger and return True on success."""
+    name = item["name"]
+    kind = item_kind(item)
+    if kind == "trigger":
+        cmd = [
+            "make",
+            "run-trigger",
+            f"TRIGGER={name}",
+            f"TRIGGER_PACKAGE={item['package']}",
+        ]
+    else:
+        cmd = ["make", "run", f"CONNECTOR={name}"]
     if instructions:
         cmd.append(f"ADDITIONAL_INSTRUCTIONS={instructions}")
 
@@ -232,13 +260,13 @@ def print_summary(results: list[dict], config: dict) -> str:
     out("=" * 70)
     out("BATCH RUN SUMMARY")
     out("=" * 70)
-    out(f" {'#':>3}  {'Connector':<20} {'Status':<10} {'Duration':<12} {'Cost':<10}")
-    out(f" {'---':>3}  {'--------------------':<20} {'----------':<10} {'------------':<12} {'----------':<10}")
+    out(f" {'#':>3}  {'Type':<9} {'Name':<24} {'Status':<10} {'Duration':<12} {'Cost':<10}")
+    out(f" {'---':>3}  {'---------':<9} {'------------------------':<24} {'----------':<10} {'------------':<12} {'----------':<10}")
 
     for i, r in enumerate(results, 1):
         cost_str = f"${r['cost']:.2f}" if r["cost"] is not None else "n/a"
         dur_str = fmt_duration(r["duration"]) if r["duration"] else "n/a"
-        out(f" {i:3d}  {r['name']:<20} {r['status']:<10} {dur_str:<12} {cost_str:<10}")
+        out(f" {i:3d}  {r.get('type', 'connector'):<9} {r['name']:<24} {r['status']:<10} {dur_str:<12} {cost_str:<10}")
         if r["cost"] is not None:
             total_cost += r["cost"]
         total_duration += r.get("duration", 0)
@@ -248,15 +276,16 @@ def print_summary(results: list[dict], config: dict) -> str:
             fail_count += 1
 
     out("-" * 70)
-    out(f"Total: {len(results)} connectors | {ok_count} OK | {fail_count} failed")
+    out(f"Total: {len(results)} items | {ok_count} OK | {fail_count} failed")
     out(f"Total cost: ${total_cost:.2f}  |  Total time: {fmt_duration(total_duration)}")
     out("=" * 70)
 
-    # Commit instructions for successful connectors
+    # Commit instructions for successful connectors. Trigger publishing is not
+    # wired into the existing connector-specific publish scripts yet.
     successful = [r for r in results if r["status"] == "OK"]
     if successful:
         out()
-        out("COMMIT INSTRUCTIONS (for approved connectors):")
+        out("FOLLOW-UP INSTRUCTIONS (for approved runs):")
         out("-" * 70)
 
         docs_branch = config.get("docsBranch", "docs/connector-docs")
@@ -266,16 +295,21 @@ def print_summary(results: list[dict], config: dict) -> str:
             slug = r["slug"]
             archive_dir = r.get("archiveDir", f"artifacts_archive/{slug}")
             out(f"# {r['name']}")
-            out(f"make batch-commit-docs ARTIFACTS_DIR={archive_dir} BRANCH={docs_branch}")
-            if r.get("projectPath"):
-                out(f"make batch-commit-sample PROJECT_PATH={r['projectPath']} BRANCH={samples_branch}")
+            if r.get("type", "connector") == "trigger":
+                out(f"# Review trigger artifacts in {archive_dir}")
+                out("# Trigger publish/commit helpers are not yet automated by this Makefile.")
             else:
-                out(f"# (no created-project.txt found — check {archive_dir}/run-log/)")
+                out(f"make batch-commit-docs ARTIFACTS_DIR={archive_dir} BRANCH={docs_branch}")
+                if r.get("projectPath"):
+                    out(f"make batch-commit-sample PROJECT_PATH={r['projectPath']} BRANCH={samples_branch}")
+                else:
+                    out(f"# (no created-project.txt found — check {archive_dir}/run-log/)")
             out()
 
-        out("# After reviewing and committing all approved connectors:")
-        out(f"make batch-pr-docs BRANCH={docs_branch}")
-        out(f"make batch-pr-samples BRANCH={samples_branch}")
+        if any(r.get("type", "connector") == "connector" for r in successful):
+            out("# After reviewing and committing all approved connectors:")
+            out(f"make batch-pr-docs BRANCH={docs_branch}")
+            out(f"make batch-pr-samples BRANCH={samples_branch}")
         out("=" * 70)
 
     return "\n".join(lines)
@@ -286,7 +320,7 @@ def print_summary(results: list[dict], config: dict) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Queue multiple connectors for sequential pipeline execution."
+        description="Queue multiple connectors/triggers for sequential pipeline execution."
     )
     parser.add_argument(
         "--config",
@@ -306,13 +340,13 @@ def main() -> None:
     parser.add_argument(
         "--create-prs",
         action="store_true",
-        help="Create PRs after all connectors are processed",
+        help="Create connector PRs after all items are processed",
     )
     parser.add_argument(
         "--timeout",
         type=int,
         default=3600,
-        help="Max seconds per connector pipeline (default: 3600)",
+        help="Max seconds per item pipeline (default: 3600)",
     )
     args = parser.parse_args()
 
@@ -328,17 +362,21 @@ def main() -> None:
         print("=" * 70)
         for i, c in enumerate(connectors, 1):
             name = c["name"]
-            slug = slugify(name)
+            kind = item_kind(c)
+            slug = artifact_slug(name, kind)
             skip = name in state["completed"] or name in state["failed"]
             status = " (skip — already processed)" if skip else ""
             instr = f'  instructions: "{c["instructions"]}"' if c.get("instructions") else ""
-            print(f"  {i}. {name} → slug: {slug}{status}")
+            package = f"  package: {c['package']}" if kind == "trigger" else ""
+            print(f"  {i}. [{kind}] {name} → slug: {slug}{status}")
+            if package:
+                print(f"     {package}")
             if instr:
                 print(f"     {instr}")
         print(f"\nDocs branch:    {config['docsBranch']}")
         print(f"Samples branch: {config['samplesBranch']}")
-        print(f"Timeout:        {args.timeout}s per connector")
-        print(f"Total:          {len(connectors)} connectors")
+        print(f"Timeout:        {args.timeout}s per item")
+        print(f"Total:          {len(connectors)} items")
         return
 
     # Set up graceful Ctrl+C handling
@@ -355,7 +393,7 @@ def main() -> None:
     total = len(connectors)
 
     print("=" * 70)
-    print(f"BATCH RUN — {total} connectors queued")
+    print(f"BATCH RUN — {total} items queued")
     print(f"Docs branch:    {config['docsBranch']}")
     print(f"Samples branch: {config['samplesBranch']}")
     print("=" * 70)
@@ -366,7 +404,8 @@ def main() -> None:
             break
 
         name = c["name"]
-        slug = slugify(name)
+        kind = item_kind(c)
+        slug = artifact_slug(name, kind)
         instructions = c.get("instructions", "")
 
         # Skip if already processed
@@ -378,7 +417,9 @@ def main() -> None:
             continue
 
         print(f"\n{'=' * 70}")
-        print(f"[{i}/{total}] Processing: {name}")
+        print(f"[{i}/{total}] Processing {kind}: {name}")
+        if kind == "trigger":
+            print(f"         Package: {c['package']}")
         if instructions:
             print(f"         Instructions: {instructions}")
         print("=" * 70)
@@ -390,11 +431,11 @@ def main() -> None:
         connector_start = time.time()
 
         # Run pipeline
-        success = run_pipeline(name, instructions, args.timeout)
+        success = run_pipeline(c, instructions, args.timeout)
         connector_duration = time.time() - connector_start
 
         # Parse cost data
-        cost_data = parse_run_cost(slug)
+        cost_data = parse_run_cost(slug, kind)
         cost_usd = cost_data["totalCostUsd"] if cost_data else None
 
         # Read project path before archiving
@@ -408,6 +449,7 @@ def main() -> None:
         # Record result
         result_entry = {
             "name": name,
+            "type": kind,
             "slug": slug,
             "status": status,
             "duration": connector_duration,
@@ -442,11 +484,14 @@ def main() -> None:
 
     # Optionally create PRs
     if args.create_prs:
-        successful = [r for r in state["results"] if r["status"] == "OK"]
-        if not successful:
-            print("\n[WARN] No successful connectors — skipping PR creation.")
+        successful_connectors = [
+            r for r in state["results"]
+            if r["status"] == "OK" and r.get("type", "connector") == "connector"
+        ]
+        if not successful_connectors:
+            print("\n[WARN] No successful connectors — skipping connector PR creation.")
         else:
-            print("\n[INFO] Creating PRs...")
+            print("\n[INFO] Creating connector PRs...")
             run_make_target("batch-pr-docs", BRANCH=config["docsBranch"])
             run_make_target("batch-pr-samples", BRANCH=config["samplesBranch"])
 

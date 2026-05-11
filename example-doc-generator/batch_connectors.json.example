@@ -2,7 +2,13 @@
   "connectors": [
     { "name": "mysql" },
     { "name": "zoom.meetings", "instructions": "Use BearerTokenConfig for authentication." },
-    { "name": "aws.sns", "instructions": "Use StaticCredentialsConfig." }
+    { "name": "aws.sns", "instructions": "Use StaticCredentialsConfig." },
+    {
+      "type": "trigger",
+      "name": "trigger.github",
+      "package": "ballerinax/trigger.github",
+      "instructions": "Use IssuesService and the onOpened handler."
+    }
   ],
   "docsBranch": "docs/connector-docs",
   "samplesBranch": "samples/connector-samples"

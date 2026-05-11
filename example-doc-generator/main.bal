@@ -31,18 +31,38 @@ import wso2/example_doc_generator.utils;
 # Phase 2  (Steps 3–6):  Infrastructure     — code-server, extension check, and Python agent server.
 # Phase 3  (Steps 7–10): Prompt generation  — build, call Claude, format, save.
 # Phase 4  (Steps 11–12): Agent execution   — run agent, enforce doc structure.
-# Phase 5  (Steps 13–16): Post-processing   — inject Devant button, append examples link, crop screenshots, write run log.
+# Phase 5  (Steps 13–17): Post-processing   — inject Devant button, append examples link, crop screenshots, write run log, stop agent server.
 #
-# + connectorName          - exact Ballerina Central package name, e.g. "mysql", "kafka"
-# + additionalInstructions - optional extra instructions for the agent (e.g. "Use BearerTokenConfig for auth")
+# + modeOrConnectorName    - connector name by default, or "--trigger" to run the trigger workflow
+# + arg2                   - connector additional instructions, or trigger name when --trigger is used
+# + arg3                   - trigger package when --trigger is used
+# + arg4                   - trigger additional instructions when --trigger is used
 # + return                 - an error if any step fails
-public function main(string connectorName, string additionalInstructions = "") returns error? {
+public function main(string modeOrConnectorName, string arg2 = "", string arg3 = "", string arg4 = "") returns error? {
+    boolean triggerMode = modeOrConnectorName == "--trigger" || modeOrConnectorName == "-t" ||
+        modeOrConnectorName == "trigger";
+    string workflowKind = triggerMode ? "trigger" : "connector";
+    string targetName = triggerMode ? arg2.trim() : modeOrConnectorName.trim();
+    if targetName == "" {
+        return error(triggerMode ? "Trigger name is required. Usage: bal run -- --trigger <triggerName> <triggerPackage> [additionalInstructions]" :
+            "Connector name is required. Usage: bal run -- <connectorName> [additionalInstructions]");
+    }
+    string triggerPackage = triggerMode ? arg3.trim() : "";
+    if triggerMode && triggerPackage == "" {
+        return error("Trigger package is required. Usage: bal run -- --trigger <triggerName> <triggerPackage> [additionalInstructions]");
+    }
+    string additionalInstructions = triggerMode ? arg4 : arg2;
+
     utils:log("=== WSO2 Integrator Documentation Pipeline ===");
     utils:log("");
 
     time:Utc startTime = time:utcNow();
     utils:log("[INFO] Start time: " + time:utcToString(startTime));
-    utils:log("[INFO] Connector: " + connectorName);
+    utils:log("[INFO] Mode: " + workflowKind);
+    utils:log("[INFO] " + (triggerMode ? "Trigger" : "Connector") + ": " + targetName);
+    if triggerMode {
+        utils:log("[INFO] Trigger package: " + triggerPackage);
+    }
     if additionalInstructions != "" {
         utils:log("[INFO] Additional instructions: " + additionalInstructions);
     }
@@ -54,12 +74,10 @@ public function main(string connectorName, string additionalInstructions = "") r
 
     // ── Phase 1: Pre-flight validation ─────────────────────────────────────
 
-    // Step 1: Validate Anthropic API key with a small ping before doing anything else
     utils:log("[STEP 1] Validating Anthropic API key...");
     check ai_client:validateApiKey(llmApiKey);
     utils:log("");
 
-    // Step 2: Check Claude Code CLI is installed (required for agent execution)
     utils:log("[STEP 2] Checking if Claude Code CLI is installed...");
     boolean claudeInstalled = utils:checkClaudeCodeInstalled();
     if !claudeInstalled {
@@ -71,7 +89,6 @@ public function main(string connectorName, string additionalInstructions = "") r
 
     // ── Phase 2: Infrastructure ─────────────────────────────────────────────
 
-    // Step 3: Check if code-server binary is installed; install via official script if not
     utils:log("[STEP 3] Checking if code-server is installed...");
     boolean codeServerBinaryInstalled = utils:checkCodeServerInstalled();
     if !codeServerBinaryInstalled {
@@ -83,7 +100,6 @@ public function main(string connectorName, string additionalInstructions = "") r
     }
     utils:log("");
 
-    // Step 4: Verify code-server is running on the configured port, start if needed
     utils:log("[STEP 4] Verifying code-server on port " + codeServerPort.toString() + "...");
     boolean codeServerRunning = utils:checkCodeServerRunning(codeServerPort);
     if !codeServerRunning {
@@ -97,7 +113,6 @@ public function main(string connectorName, string additionalInstructions = "") r
     utils:log("\t[INFO] Code-server URL: " + codeServerUrl);
     utils:log("");
 
-    // Step 5: Ensure the WSO2 Integrator extension is installed in code-server
     utils:log("[STEP 5] Checking WSO2 Integrator extension (wso2.wso2-integrator)...");
     boolean extInstalled = utils:checkExtensionInstalled("wso2.wso2-integrator");
     if !extInstalled {
@@ -109,7 +124,6 @@ public function main(string connectorName, string additionalInstructions = "") r
     }
     utils:log("");
 
-    // Step 6: Check if the Python agent server is running; start it if not
     utils:log("[STEP 6] Checking Python agent server on port " + agentServerPort.toString() + "...");
     boolean agentRunning = utils:checkAgentServerRunning(agentServerPort);
     if !agentRunning {
@@ -125,43 +139,47 @@ public function main(string connectorName, string additionalInstructions = "") r
 
     // ── Phase 3: Prompt generation ──────────────────────────────────────────
 
-    // Derive connector slug from connector name — no LLM call needed
+    // Derive artifact slugs from the target name — no LLM call needed
     // Preserve dots so org-qualified names like "aws.sns" stay as "aws.sns" in paths/branches.
-    string connectorSlug = connectorName.trim().toLowerAscii();
+    string connectorSlug = targetName.trim().toLowerAscii();
     connectorSlug = re `\s+`.replaceAll(connectorSlug, "-");
     connectorSlug = re `[^a-z0-9\-\.]`.replaceAll(connectorSlug, "");
     // Image filenames must use underscores (dots are not safe in screenshot prefixes).
     string imgSlug = re `\.`.replaceAll(connectorSlug, "_");
-    string goalSlug = connectorSlug + "-connector-example";
-    utils:log("[INFO] Connector slug: " + goalSlug);
+    string sampleName = re `^trigger\.`.replaceAll(connectorSlug, "");
+    sampleName = re `\.`.replaceAll(sampleName, "");
+    string goalSlug = triggerMode ? imgSlug + "-trigger-example" : connectorSlug + "-connector-example";
+    utils:log("[INFO] " + (triggerMode ? "Trigger" : "Connector") + " slug: " + goalSlug);
 
-    // Write connector name to artifacts/run-log/ for downstream steps
+    // Write target name to artifacts/run-log/ for downstream steps
     string runLogDir = "./artifacts/run-log";
     file:Error? cnDirErr = file:createDir(runLogDir, file:RECURSIVE);
     if cnDirErr is file:Error {
         return error("Could not create run-log directory: " + cnDirErr.message());
     }
-    io:Error? cnWriteErr = io:fileWriteString(runLogDir + "/connector-name.txt", connectorName.trim());
+    string targetNameFile = triggerMode ? "trigger-name.txt" : "connector-name.txt";
+    io:Error? cnWriteErr = io:fileWriteString(runLogDir + "/" + targetNameFile, targetName);
     if cnWriteErr is io:Error {
-        return error("Could not write connector-name.txt: " + cnWriteErr.message());
+        return error("Could not write " + targetNameFile + ": " + cnWriteErr.message());
     }
-    utils:log("\t[INFO] Connector name saved to " + runLogDir + "/connector-name.txt");
+    utils:log("\t[INFO] " + (triggerMode ? "Trigger" : "Connector") + " name saved to " + runLogDir + "/" + targetNameFile);
     utils:log("");
 
-    // Step 7: Build system and user prompts
     utils:log("[STEP 7] Building system and user prompts...");
     string|error cwdResult = file:getCurrentDir();
     string projectRoot = cwdResult is string ? cwdResult : os:getEnv("PWD");
-    string systemPrompt = prompts:buildSystemPrompt(projectRoot, connectorName, imgSlug);
-    string userMessage = prompts:buildUserMessage(connectorName, codeServerUrl, projectRoot, additionalInstructions);
+    string systemPrompt = triggerMode ?
+        prompts:buildTriggerSystemPrompt(projectRoot, targetName, triggerPackage, imgSlug, sampleName) :
+        prompts:buildSystemPrompt(projectRoot, targetName, imgSlug);
+    string userMessage = triggerMode ?
+        prompts:buildTriggerUserMessage(targetName, triggerPackage, codeServerUrl, projectRoot, additionalInstructions) :
+        prompts:buildConnectorUserMessage(targetName, codeServerUrl, projectRoot, additionalInstructions);
 
-    // Step 8: Call Anthropic API to generate the execution prompt
     utils:log("[STEP 8] Calling Anthropic API to generate execution prompt...");
     ai_client:LlmResult promptResult = check ai_client:callClaude(systemPrompt, userMessage, llmApiKey);
     string executionPrompt = promptResult.text;
     promptGenUsage = promptResult.usage;
 
-    // Step 9: Add header to the generated prompt
     utils:log("[STEP 9] Formatting execution prompt...");
     string header = string `# Execution Prompt
 
@@ -170,13 +188,12 @@ public function main(string connectorName, string additionalInstructions = "") r
      Generated by: WSO2 Integrator Documentation Pipeline
      Agent: Playwright MCP (Browser Automation)
      Target: Code-Server — WSO2 Integrator (Low-Code)
-     Connector: ${connectorName}
+     ${triggerMode ? "Trigger" : "Connector"}: ${targetName}
      ============================================================ -->
 
 `;
     string fullPrompt = header + executionPrompt;
 
-    // Step 10: Save to file — returns the path used for the agent in Step 11
     utils:log("[STEP 10] Saving execution prompt to " + utils:OUTPUT_DIR + "...");
     string promptPath = check utils:saveExecutionPrompt(fullPrompt, goalSlug);
     utils:log("\t[INFO] Saved to: " + promptPath);
@@ -184,14 +201,12 @@ public function main(string connectorName, string additionalInstructions = "") r
 
     // ── Phase 4: Agent execution ─────────────────────────────────────────────
 
-    // Step 11: Submit the execution prompt to the agent server and stream logs
     utils:log("[STEP 11] Running Claude agent...");
     agent_client:AgentCost? agentCost = check agent_client:runClaudeAgent(promptPath, agentUrl);
     utils:log("");
 
     // ── Phase 5: Post-processing ──────────────────────────────────────────────
 
-    // Step 12: Enforce documentation structure via a dedicated Claude API call.
     // The agent writes the doc with all browser-automation context in its window;
     // rules stated early in the system prompt get buried. This call has the rules
     // fresh in context with no other noise, so they are reliably applied.
@@ -218,7 +233,9 @@ public function main(string connectorName, string additionalInstructions = "") r
                 return error("Could not read workflow doc: " + rawDoc.message());
             }
             enforcedDocPath = docPath;
-            string enforcementSystemPrompt = prompts:buildDocEnforcementSystemPrompt();
+            string enforcementSystemPrompt = triggerMode ?
+                prompts:buildTriggerDocEnforcementSystemPrompt() :
+                prompts:buildDocEnforcementSystemPrompt();
             ai_client:LlmResult enfResult = check ai_client:callClaude(enforcementSystemPrompt, rawDoc, llmApiKey);
             io:Error? writeErr = io:fileWriteString(docPath, enfResult.text);
             if writeErr is io:Error {
@@ -232,25 +249,26 @@ public function main(string connectorName, string additionalInstructions = "") r
     }
     utils:log("");
 
-    // Step 13: Inject "Try it yourself" section into the workflow doc
     utils:log("[STEP 13] Injecting 'Try it yourself' section into workflow doc...");
-    if enforcedDocPath != "" {
+    if triggerMode {
+        utils:log("\t[INFO] Trigger mode detected — skipping connector-specific 'Try it yourself' section injection.");
+    } else if enforcedDocPath != "" {
         utils:injectTryItYourselfSection(enforcedDocPath);
     } else {
         utils:log("\t[INFO] No enforced doc path available — skipping 'Try it yourself' section injection.");
     }
     utils:log("");
 
-    // Step 14: Append Ballerina Central examples link to the workflow doc (if examples exist)
     utils:log("[STEP 14] Checking Ballerina Central for connector examples link...");
-    if enforcedDocPath != "" {
+    if triggerMode {
+        utils:log("\t[INFO] Trigger mode detected — skipping connector examples link.");
+    } else if enforcedDocPath != "" {
         utils:appendExamplesSection(enforcedDocPath);
     } else {
         utils:log("\t[INFO] No enforced doc path available — skipping examples link.");
     }
     utils:log("");
 
-    // Step 15: Crop UI chrome from screenshots produced by the agent
     utils:log("[STEP 15] Cropping screenshots...");
     os:Process|error cropProc = os:exec({
         value: "python/.venv/bin/python",
@@ -290,10 +308,9 @@ public function main(string connectorName, string additionalInstructions = "") r
     }
     decimal totalCombinedCostUsd = totalCostUsd + agentCostUsd;
 
-    // Step 16: Write run log to artifacts/run-log/
     utils:log("[STEP 16] Writing run log...");
     utils:writeRunLog({
-        connectorName:            connectorName,
+        connectorName:            targetName,
         connectorSlug:            goalSlug,
         additionalInstructions:   additionalInstructions,
         startTime:           startTime,
@@ -321,6 +338,15 @@ public function main(string connectorName, string additionalInstructions = "") r
     utils:log(string `Direct API total:${totalInputTokens} in / ${totalOutputTokens} out  |  $${totalCostUsd}`);
     utils:log(string `Agent SDK:       $${agentCostUsd}`);
     utils:log(string `COMBINED TOTAL:  $${totalCombinedCostUsd}`);
+
+    utils:log("");
+    utils:log("[STEP 17] Stopping Python agent server...");
+    error? stopErr = agent_client:stopAgentServer(agentUrl);
+    if stopErr is error {
+        utils:log("\t[WARN] Could not stop Python agent server: " + stopErr.message());
+    } else {
+        utils:log("\t[INFO] Python agent server stopped.");
+    }
 
     utils:log("");
     utils:log("=== Pipeline Complete ===");

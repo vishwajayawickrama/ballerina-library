@@ -1,4 +1,4 @@
-.PHONY: help setup setup-python setup-bal build run \
+.PHONY: help setup setup-python setup-bal build run run-trigger \
         start-agent stop-agent \
         crop-screenshots crop-screenshots-dry crop-screenshots-backup \
         publish-docs publish-docs-dry publish-docs-no-preview publish-docs-no-pr \
@@ -24,8 +24,12 @@ help:
 	@echo "    make setup-bal        Build the Ballerina project"
 	@echo ""
 	@echo "  Run"
-	@echo "    make run CONNECTOR=mysql                                    Run the full pipeline for a connector"
-	@echo "    make run CONNECTOR=mysql ADDITIONAL_INSTRUCTIONS='...'  Run with per-connector guidance (use single quotes for multi-word values)"
+	@echo "    make run CONNECTOR=mysql                                      Run the full pipeline for a connector"
+	@echo "    make run CONNECTOR=mysql ADDITIONAL_INSTRUCTIONS='...'        Run with per-connector guidance"
+	@echo "    make run-trigger TRIGGER=trigger.github TRIGGER_PACKAGE=ballerinax/trigger.github"
+	@echo "                                                                Run the full pipeline for a trigger"
+	@echo "    make run-trigger TRIGGER=trigger.github TRIGGER_PACKAGE=ballerinax/trigger.github ADDITIONAL_INSTRUCTIONS='...'"
+	@echo "                                                                Run a trigger with extra guidance"
 	@echo "    make start-agent      Start the Python agent server in the foreground"
 	@echo "    make stop-agent       Send shutdown request to the agent server"
 	@echo ""
@@ -73,13 +77,12 @@ help:
 	@echo "    Workflow: run pipeline for each connector → 'make batch-commit-sample' each time"
 	@echo "              → 'make batch-pr-samples BRANCH=...' once when all samples are committed"
 	@echo ""
-	@echo "  Batch Run (queue multiple connectors sequentially)"
+	@echo "  Batch Run (queue connectors/triggers sequentially)"
 	@echo "    make batch-run                    Run queue from batch_connectors.json"
 	@echo "    make batch-run-dry                Print planned execution order, no changes"
 	@echo "    BATCH_CONFIG=path.json            Override config file (default: batch_connectors.json)"
 	@echo "    BATCH_RUN_ARGS='--no-resume'      Extra flags: --no-resume, --create-prs, --timeout N"
-	@echo "    Workflow: 1) make batch-run  2) review artifacts_archive/  3) commit approved connectors"
-	@echo "              4) make batch-pr-docs BRANCH=...  5) make batch-pr-samples BRANCH=..."
+	@echo "    Workflow: 1) make batch-run  2) review artifacts_archive/  3) commit/publish approved artifacts"
 	@echo ""
 	@echo "  Publish Sample"
 	@echo "    make publish-sample               Publish integration sample PR + delete local project + close tabs"
@@ -139,6 +142,12 @@ run:
 	@[ "$(CONNECTOR)" ] || { echo "Usage: make run CONNECTOR=mysql"; exit 1; }
 	@echo "→ Running full pipeline for connector: $(CONNECTOR)$(if $(ADDITIONAL_INSTRUCTIONS), (with additional instructions),)"
 	bal run -- $(CONNECTOR) $(if $(ADDITIONAL_INSTRUCTIONS),"$$ADDITIONAL_INSTRUCTIONS",)
+
+run-trigger:
+	@[ "$(TRIGGER)" ] || { echo "Usage: make run-trigger TRIGGER=trigger.github TRIGGER_PACKAGE=ballerinax/trigger.github"; exit 1; }
+	@[ "$(TRIGGER_PACKAGE)" ] || { echo "Usage: make run-trigger TRIGGER=trigger.github TRIGGER_PACKAGE=ballerinax/trigger.github"; exit 1; }
+	@echo "→ Running full pipeline for trigger: $(TRIGGER) ($(TRIGGER_PACKAGE))$(if $(ADDITIONAL_INSTRUCTIONS), (with additional instructions),)"
+	bal run -- trigger $(TRIGGER) $(TRIGGER_PACKAGE) $(if $(ADDITIONAL_INSTRUCTIONS),"$$ADDITIONAL_INSTRUCTIONS",)
 
 crop-screenshots: python/.venv/.installed
 	python/.venv/bin/python python/crop_screenshots.py
@@ -378,7 +387,7 @@ batch-pr-samples-dry: python/.venv/.installed
 	@echo "→ Dry run: create PR from batch samples branch: $(BRANCH)"
 	$(_batch_pr_samples_cmd) --dry-run
 
-# ── Batch Run (queue multiple connectors) ─────────────────────────────────────
+# ── Batch Run (queue multiple connectors/triggers) ────────────────────────────
 BATCH_CONFIG ?= batch_connectors.json
 BATCH_RUN_ARGS ?=
 
