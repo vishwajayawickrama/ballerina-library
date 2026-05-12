@@ -171,9 +171,14 @@ jobs:
         if: ${{ inputs.publishConnector && inputs.mode == 'connector' }}
         env:
           DOCS_INTEGRATOR_FORK: ${{ inputs.docsIntegratorFork }}
+          DOCS_INTEGRATOR_TOKEN: ${{ secrets.DOCS_INTEGRATOR_TOKEN }}
         run: |
           if [ -z "$DOCS_INTEGRATOR_FORK" ]; then
             echo "[ERROR] docsIntegratorFork is required when publishConnector is true."
+            exit 1
+          fi
+          if [ -z "$DOCS_INTEGRATOR_TOKEN" ]; then
+            echo "[ERROR] DOCS_INTEGRATOR_TOKEN secret is required when publishConnector is true."
             exit 1
           fi
 

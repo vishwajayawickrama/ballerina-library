@@ -91,8 +91,8 @@ public function checkCodeServerRunning(int port) returns boolean {
 # + extensionId - the extension identifier to look for (e.g. "wso2.wso2-integrator")
 # + return - true if the extension is installed, false otherwise
 public function checkExtensionInstalled(string extensionId) returns boolean {
-    // Reject extensionIds containing characters outside the safe allowlist.
-    if !re`[A-Za-z0-9._\-/]+`.isFullMatch(extensionId) {
+    string safeExtensionId = extensionId.trim();
+    if !isValidExtensionId(safeExtensionId) {
         return false;
     }
     os:Process|error proc = os:exec({
@@ -113,7 +113,7 @@ public function checkExtensionInstalled(string extensionId) returns boolean {
     }
     string[] lines = re`\n`.split(outStr);
     foreach string line in lines {
-        if line.trim() == extensionId {
+        if line.trim() == safeExtensionId {
             return true;
         }
     }
@@ -125,10 +125,14 @@ public function checkExtensionInstalled(string extensionId) returns boolean {
 # + extensionId - the extension identifier (e.g. "wso2.wso2-integrator")
 # + return - an error if the install attempt fails
 public function ensureExtensionInstalled(string extensionId) returns error? {
-    log("\t[INFO] Trying marketplace install for: " + extensionId);
+    string safeExtensionId = extensionId.trim();
+    if !isValidExtensionId(safeExtensionId) {
+        return error("Invalid extension id. Expected marketplace id format such as publisher.extension.");
+    }
+    log("\t[INFO] Trying marketplace install for: " + safeExtensionId);
     os:Process|error marketProc = os:exec({
         value: "code-server",
-        arguments: ["--install-extension", extensionId]
+        arguments: ["--install-extension", safeExtensionId]
     });
     if marketProc is error {
         return error("Failed to launch extension install: " + marketProc.message());
@@ -140,6 +144,14 @@ public function ensureExtensionInstalled(string extensionId) returns error? {
     if marketExit != 0 {
         return error("Extension install failed with exit code: " + marketExit.toString());
     }
+}
+
+function isValidExtensionId(string extensionId) returns boolean {
+    string trimmedId = extensionId.trim();
+    if trimmedId == "" || trimmedId.startsWith("-") {
+        return false;
+    }
+    return re`[A-Za-z0-9][A-Za-z0-9_-]*([.][A-Za-z0-9][A-Za-z0-9_-]*)+`.isFullMatch(trimmedId);
 }
 
 # Starts code-server on the given port and waits until it is ready.

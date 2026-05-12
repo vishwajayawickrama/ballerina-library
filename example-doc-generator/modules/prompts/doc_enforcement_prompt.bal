@@ -237,9 +237,9 @@ For bullet list items:
 In a series of three or more items joined by a conjunction, include a comma before the final conjunction.
 Example: "Android, iOS and Windows" → "Android, iOS, and Windows"
 
-### Rule MSG-8: Em dashes
+### Rule MSG-8: Parenthetical dashes in prose only
 
-Use em dashes (—) with no surrounding spaces to set off parenthetical phrases in prose.
+Use em dashes (—) with no surrounding spaces to set off parenthetical phrases in prose only.
 Example: "use pipelines — logical groups — to..." → "use pipelines—logical groups—to..."
 EXCEPTION: Do NOT apply this rule to parameter bullet lines. Parameter bullets use " : " (space-colon-space) as the separator between the parameter name and its description (e.g., **host** : the Redis server hostname). This is the correct format and must not be changed.
 
@@ -255,7 +255,7 @@ A "distinct sequential instruction" is any sentence (or clause separated by a pe
 
 **How to fix:**
 - Split each instruction into its own numbered item (1., 2., 3., …).
-- Keep parameter bullet lines (- **paramName** — description) and screenshot references AFTER the last numbered item, outside the numbered list.
+- Keep parameter bullet lines (- **paramName** : description) and screenshot references AFTER the last numbered item, outside the numbered list.
 
 **Examples:**
 
@@ -406,7 +406,7 @@ Each screenshot must be embedded in the step whose **action directly produced wh
 
 **Screenshot 02 — Connection form filled (_02_connection_form):**
 - MUST be embedded in the step that describes **binding ALL connection parameters to Configurable variables** (fields show configurable variable names, not literal values), before saving.
-- That step MUST list every configured parameter as a bullet: **[paramName]** — [description].
+- That step MUST list every configured parameter as a bullet: **[paramName]** : [description].
 - MUST NOT appear in a step that describes opening the form or saving/confirming.
 
 **Screenshot 03 — Canvas / Connections panel after save (_03_connections_list):**

@@ -128,9 +128,11 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
 
     utils:log("[STEP 6] Checking Python agent server on port " + agentServerPort.toString() + "...");
     boolean agentRunning = utils:checkAgentServerRunning(agentServerPort);
+    boolean agentStartedByThisProcess = false;
     if !agentRunning {
         utils:log("\t[INFO] Agent server not running. Starting via `uv run agent_server.py`...");
         check utils:startAgentServer(agentServerPort);
+        agentStartedByThisProcess = true;
         utils:log("\t[INFO] Agent server started.");
     } else {
         utils:log("\t[INFO] Agent server is already running.");
@@ -349,12 +351,16 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     }
 
     utils:log("");
-    utils:log("[STEP 17] Stopping Python agent server...");
-    error? stopErr = agent_client:stopAgentServer(agentUrl);
-    if stopErr is error {
-        utils:log("\t[WARN] Could not stop Python agent server: " + stopErr.message());
+    if agentStartedByThisProcess {
+        utils:log("[STEP 17] Stopping Python agent server...");
+        error? stopErr = agent_client:stopAgentServer(agentUrl);
+        if stopErr is error {
+            utils:log("\t[WARN] Could not stop Python agent server: " + stopErr.message());
+        } else {
+            utils:log("\t[INFO] Python agent server stopped.");
+        }
     } else {
-        utils:log("\t[INFO] Python agent server stopped.");
+        utils:log("[STEP 17] Python agent server was already running; leaving it active.");
     }
 
     if pipelineErr is error {

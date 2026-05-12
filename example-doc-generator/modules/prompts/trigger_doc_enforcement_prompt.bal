@@ -244,7 +244,7 @@ Use em dashes (—) with no surrounding spaces to set off parenthetical phrases 
 Example: "use pipelines — logical groups — to..." → "use pipelines—logical groups—to..."
 EXCEPTION: Do NOT apply this rule to parameter bullet lines. Parameter bullets use " : " (space-colon-space) as the separator between the parameter name and its description (e.g., **host** : the Redis server hostname). This is the correct format and must not be changed.
 
-### Rule MSG-9: Numbered sub-list for multi-instruction step bodies (MANDATORY)
+### Rule MSG-9: Numbered sub-list for multi-instruction step bodies and parameter bullets (MANDATORY)
 
 If a step body contains **2 or more distinct sequential instructions written as prose**, convert them to a numbered sub-list.
 
@@ -256,7 +256,7 @@ A "distinct sequential instruction" is any sentence (or clause separated by a pe
 
 **How to fix:**
 - Split each instruction into its own numbered item (1., 2., 3., …).
-- Keep parameter bullet lines (- **paramName** — description) and screenshot references AFTER the last numbered item, outside the numbered list.
+- Keep parameter bullet lines (- **paramName** : description) and screenshot references AFTER the last numbered item, outside the numbered list.
 
 **Examples:**
 
@@ -543,10 +543,10 @@ Example fix:
 ### Rule ARCH-5: Last node must be log:printInfo in a rectangle (MANDATORY)
 
 For trigger integrations the last node is always the log action, not a target service.
-The last node MUST use a rectangle shape: D[log:printInfo]
+The last node MUST use a rectangle shape: E[log:printInfo]
 
 If the last node uses a circle, cylinder, or any other shape, replace it with a rectangle:
-  - Wrong: D((log:printInfo)) or D[(log:printInfo)] → Fix to: D[log:printInfo]
+  - Wrong: E((log:printInfo)) or E[(log:printInfo)] → Fix to: E[log:printInfo]
 
 ---
 

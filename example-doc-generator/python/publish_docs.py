@@ -228,6 +228,10 @@ def fail(msg: str) -> None:
     sys.exit(1)
 
 
+class PreviewError(RuntimeError):
+    """Raised when optional preview screenshot generation cannot continue."""
+
+
 # ── Subprocess helper ─────────────────────────────────────────────────────────
 
 def run(cmd: list[str], cwd: Path | None = None, check: bool = True) -> str:
@@ -535,7 +539,7 @@ def take_preview_screenshots(
 
     en_dir = docs_repo / "en"
     if not (en_dir / "node_modules").exists():
-        fail(
+        raise PreviewError(
             f"node_modules not found in {en_dir}.\n"
             f"Run: cd {en_dir} && npm install"
         )
@@ -568,7 +572,7 @@ def take_preview_screenshots(
 
     if not ready:
         server_proc.kill()
-        fail(f"Docusaurus server did not start within 90s on port {PREVIEW_PORT}.")
+        raise PreviewError(f"Docusaurus server did not start within 90s on port {PREVIEW_PORT}.")
 
     info(f"Server ready. Navigating to: {page_url}")
 
