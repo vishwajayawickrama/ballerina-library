@@ -22,7 +22,7 @@ import ballerina/time;
 const string DEFAULT_CONFIG = "batch_items.json";
 const string ARTIFACTS_DIR = "./artifacts";
 const string ARCHIVE_DIR = "./artifacts_archive";
-const int DEFAULT_TIMEOUT_SECONDS = 3600;
+const int DEFAULT_TIMEOUT_SECONDS = 7200;
 
 type BatchConfig record {|
     BatchItem[] items;

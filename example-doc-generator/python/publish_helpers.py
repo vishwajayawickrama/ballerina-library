@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 try:
     from dotenv import load_dotenv
@@ -41,7 +42,7 @@ def dry(msg: str) -> None:
     print(f"[DRY]   {msg}")
 
 
-def fail(msg: str) -> None:
+def fail(msg: str) -> NoReturn:
     print(f"\n[ERROR] {msg}", file=sys.stderr)
     sys.exit(1)
 
@@ -54,6 +55,8 @@ def run(cmd: list[str], cwd: Path | None = None, check: bool = True) -> str:
         text=True,
         check=check,
     )
+    if result.stderr.strip():
+        warn(result.stderr.strip())
     return result.stdout.strip()
 
 

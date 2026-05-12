@@ -150,7 +150,7 @@ bal run -- batch config=batch_items.json
 With a longer per-item timeout:
 
 ```bash
-bal run -- batch config=batch_items.json timeout=5400
+bal run -- batch config=batch_items.json timeout=7200
 ```
 
 ## What a Run Produces

@@ -80,7 +80,7 @@ help:
 	@echo "  Batch Run (queue connectors/triggers sequentially)"
 	@echo "    make batch-run                    Run queue from batch_items.json"
 	@echo "    BATCH_CONFIG=path.json            Override config file (default: batch_items.json)"
-	@echo "    BATCH_RUN_ARGS='timeout=5400'     Extra flags for the Ballerina batch runner"
+	@echo "    BATCH_RUN_ARGS='timeout=7200'     Extra flags for the Ballerina batch runner"
 	@echo "    Workflow: 1) make batch-run  2) review artifacts_archive/  3) publish approved artifacts"
 	@echo ""
 	@echo "  Publish Sample"
@@ -140,12 +140,12 @@ export ADDITIONAL_INSTRUCTIONS
 run:
 	@[ "$(CONNECTOR)" ] || { echo "Usage: make run CONNECTOR=mysql"; exit 1; }
 	@echo "→ Running full pipeline for connector: $(CONNECTOR)$(if $(ADDITIONAL_INSTRUCTIONS), (with additional instructions),)"
-	bal run -- $(CONNECTOR) $(if $(ADDITIONAL_INSTRUCTIONS),"$$ADDITIONAL_INSTRUCTIONS",)
+	bal run -- "$(CONNECTOR)" $(if $(ADDITIONAL_INSTRUCTIONS),"$$ADDITIONAL_INSTRUCTIONS",)
 
 run-trigger:
 	@[ "$(TRIGGER)" ] || { echo "Usage: make run-trigger TRIGGER=trigger.github"; exit 1; }
 	@echo "→ Running full pipeline for trigger: $(TRIGGER)$(if $(ADDITIONAL_INSTRUCTIONS), (with additional instructions),)"
-	bal run -- trigger $(TRIGGER) $(if $(ADDITIONAL_INSTRUCTIONS),"$$ADDITIONAL_INSTRUCTIONS",)
+	bal run -- trigger "$(TRIGGER)" $(if $(ADDITIONAL_INSTRUCTIONS),"$$ADDITIONAL_INSTRUCTIONS",)
 
 crop-screenshots: python/.venv/.installed
 	python/.venv/bin/python python/crop_screenshots.py

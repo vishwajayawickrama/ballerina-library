@@ -56,7 +56,7 @@ jobs:
     name: Generate example documentation
     runs-on: ubuntu-latest
     environment: docs-automation
-    timeout-minutes: 100
+    timeout-minutes: 150
 
     steps:
       - name: Checkout repository
@@ -202,6 +202,7 @@ jobs:
 
       - name: Publish connector docs
         if: ${{ inputs.publishConnector && inputs.mode == 'connector' }}
+        timeout-minutes: 30
         env:
           ANTHROPIC_API_KEY: ${{ secrets.LLM_API_KEY }}
           GH_TOKEN: ${{ secrets.DOCS_INTEGRATOR_TOKEN }}
