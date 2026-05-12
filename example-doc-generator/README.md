@@ -1,8 +1,7 @@
 # Example Doc Generator
 
 This project generates WSO2 Integrator example documentation with screenshots.
-It can run one connector or trigger at a time, or process a batch queue
-sequentially.
+It can run one connector, run one trigger, or process a mixed batch queue.
 
 The pipeline is:
 
@@ -10,8 +9,8 @@ The pipeline is:
 CLI input -> Claude prompt generation -> Claude Agent + Playwright MCP -> Markdown guide + screenshots
 ```
 
-The Ballerina app orchestrates the run. The Python agent server runs the Claude
-Agent SDK and Playwright MCP against code-server.
+The Ballerina app orchestrates the pipeline. The Python agent server runs the
+Claude Agent SDK and Playwright MCP against code-server.
 
 ## Prerequisites
 
@@ -24,7 +23,7 @@ Install these first:
 | uv | latest |
 | Node.js | LTS+ |
 | Claude Code CLI | latest |
-| Anthropic API key | for both Ballerina API calls and the agent server |
+| Anthropic API key | for Ballerina API calls and the Python agent server |
 
 `code-server` is installed by the pipeline if it is missing.
 
@@ -46,7 +45,7 @@ Set `llmApiKey` in `Config.toml`.
 cp .env.example .env
 ```
 
-At minimum, set `DOCS_INTEGRATOR_FORK` if you plan to publish docs.
+At minimum, set `DOCS_INTEGRATOR_FORK` if you plan to publish connector output.
 
 3. Export the Anthropic key for the Python agent server:
 
@@ -54,70 +53,47 @@ At minimum, set `DOCS_INTEGRATOR_FORK` if you plan to publish docs.
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
-4. Install dependencies and build:
+4. Install Python dependencies and build the Ballerina app:
 
 ```bash
-make setup
+cd python
+uv venv
+uv pip install -r requirements.txt
+.venv/bin/playwright install chromium
+cd ..
+bal build
 ```
 
 ## Run One Connector
 
-Use `make run` for connector examples. Connector mode is the default.
+Connector mode is the default.
 
 ```bash
-make run CONNECTOR=mysql
+bal run -- mysql
 ```
 
 With extra guidance:
 
 ```bash
-make run CONNECTOR=zoom.meetings ADDITIONAL_INSTRUCTIONS='Use BearerTokenConfig for authentication.'
-```
-
-Direct Ballerina command:
-
-```bash
-bal run -- mysql
 bal run -- zoom.meetings "Use BearerTokenConfig for authentication."
 ```
 
 ## Run One Trigger
 
-Use `make run-trigger` for trigger examples. A trigger run needs both the
-trigger name and the full Ballerina Central package path.
+Use `trigger` as the first argument. The pipeline derives the Ballerina Central
+package path as `ballerinax/<trigger-name>`.
 
 ```bash
-make run-trigger TRIGGER=trigger.github TRIGGER_PACKAGE=ballerinax/trigger.github
+bal run -- trigger trigger.github
 ```
 
 With extra guidance:
 
 ```bash
-make run-trigger \
-  TRIGGER=trigger.github \
-  TRIGGER_PACKAGE=ballerinax/trigger.github \
-  ADDITIONAL_INSTRUCTIONS='Use IssuesService and the onOpened handler.'
+bal run -- trigger trigger.github "Use IssuesService and the onOpened handler."
 ```
 
-Direct Ballerina command:
-
-```bash
-bal run -- trigger trigger.github ballerinax/trigger.github
-bal run -- trigger trigger.github ballerinax/trigger.github "Use IssuesService and the onOpened handler."
-```
-
-## What a Run Produces
-
-Generated output is written under `artifacts/`:
-
-| Path | Contents |
-|------|----------|
-| `artifacts/execution-prompt/` | The generated execution prompt sent to the agent |
-| `artifacts/workflow-docs/` | The final Markdown guide |
-| `artifacts/screenshots/` | Captured and cropped screenshots |
-| `artifacts/run-log/` | Cost, timing, prompt path, and generated-doc path |
-
-At the end of a run, the pipeline stops the Python agent server automatically.
+Do not pass `--trigger` or `TRIGGER_PACKAGE`.
 
 ## Batch Runs
 
@@ -127,110 +103,113 @@ Batch runs process items sequentially and archive each run under
 1. Create a batch config:
 
 ```bash
-cp batch_connectors.json.example batch_connectors.json
+cp batch_items.json.example batch_items.json
 ```
 
-2. Add connector entries:
+2. Add connector and trigger entries:
 
 ```json
 {
-  "connectors": [
-    { "name": "mysql" },
+  "items": [
+    { "type": "connector", "name": "mysql" },
     {
+      "type": "connector",
       "name": "zoom.meetings",
       "instructions": "Use BearerTokenConfig for authentication."
+    },
+    {
+      "type": "trigger",
+      "name": "trigger.github",
+      "instructions": "Use IssuesService and the onOpened handler."
     }
-  ],
-  "docsBranch": "docs/connector-docs",
-  "samplesBranch": "samples/connector-samples"
+  ]
 }
 ```
 
-3. Add trigger entries with `type` and `package`:
+Rules:
 
-```json
-{
-  "type": "trigger",
-  "name": "trigger.github",
-  "package": "ballerinax/trigger.github",
-  "instructions": "Use IssuesService and the onOpened handler."
-}
-```
+- `type` is required and must be `connector` or `trigger`.
+- `name` is required.
+- `instructions` is optional.
+- Batch mode does not resume, does not dry-run, and does not create PRs.
+- Batch mode fails fast if `artifacts/` already exists to avoid archiving stale output.
+- Pressing `Ctrl+C` stops the active child pipeline before the batch exits.
 
-4. Preview the queue:
+3. Make sure no current run artifacts are present:
 
 ```bash
-make batch-run-dry
+rm -rf artifacts
 ```
 
-5. Run the queue:
+4. Run the queue:
 
 ```bash
-make batch-run
+bal run -- batch config=batch_items.json
 ```
 
-Useful options:
+With a longer per-item timeout:
 
 ```bash
-make batch-run BATCH_CONFIG=my_batch.json
-make batch-run BATCH_RUN_ARGS='--no-resume'
-make batch-run BATCH_RUN_ARGS='--timeout 5400'
+bal run -- batch config=batch_items.json timeout=5400
 ```
 
-The batch runner stores progress in `batch_state.json`. Use `--no-resume` to
-start fresh.
+## What a Run Produces
+
+Single runs write to `artifacts/`:
+
+| Path | Contents |
+|------|----------|
+| `artifacts/execution-prompt/` | Generated execution prompt sent to the agent |
+| `artifacts/workflow-docs/` | Final Markdown guide |
+| `artifacts/screenshots/` | Captured and cropped screenshots |
+| `artifacts/run-log/` | Target name, project path, timing, costs, and output paths |
+
+Batch runs move each item's `artifacts/` directory to `artifacts_archive/<slug>`
+or `artifacts_archive/<slug>_FAILED`. If a run produces no artifacts, the batch
+runner creates a `<slug>_NO_ARTIFACTS/README.txt` placeholder.
+
+At the end of a single pipeline run, the Python agent server is stopped
+automatically.
 
 ## Publishing Connector Output
 
-The current publish helpers are connector-focused.
-
-Publish the latest generated connector doc:
-
-```bash
-make publish-docs
-```
-
-Publish the latest generated connector sample:
+The publishing helpers are connector-focused Python scripts. Run them after
+reviewing generated output.
 
 ```bash
-make publish-sample
-```
-
-Publish both:
-
-```bash
-make publish-all
+python/.venv/bin/python python/publish_docs.py
+python/.venv/bin/python python/publish_sample.py
+python/.venv/bin/python python/publish_all.py
 ```
 
 Dry-run variants:
 
 ```bash
-make publish-docs-dry
-make publish-sample-dry
-make publish-all-dry
+python/.venv/bin/python python/publish_docs.py --dry-run
+python/.venv/bin/python python/publish_sample.py --dry-run
+python/.venv/bin/python python/publish_all.py --dry-run
 ```
 
-For batch connector publishing, run the pipeline for each item, review the
-archive, then commit approved artifacts to shared branches:
-
-```bash
-make batch-commit-docs ARTIFACTS_DIR=artifacts_archive/mysql BRANCH=docs/connector-docs
-make batch-commit-sample PROJECT_PATH=/path/to/generated/sample BRANCH=samples/connector-samples
-make batch-pr-docs BRANCH=docs/connector-docs
-make batch-pr-samples BRANCH=samples/connector-samples
-```
-
-Trigger publish helpers are not automated yet; review trigger artifacts in
-`artifacts_archive/` and publish them manually.
+For batch output, review each archived item under `artifacts_archive/`.
+Connector publishing can still use the existing publish scripts after you
+choose the artifact or project to publish. Trigger publish helpers are not
+automated yet, so review and publish trigger artifacts manually.
 
 ## Agent Server
 
 The pipeline starts and stops the agent server automatically. For debugging:
 
 ```bash
-make start-agent
-make stop-agent
+cd python
+unset CLAUDECODE
+.venv/bin/python agent_server.py --port 8765
+```
+
+In another terminal:
+
+```bash
 curl http://localhost:8765/health
+curl -s -X POST http://localhost:8765/shutdown
 ```
 
 The server API is:
@@ -242,35 +221,25 @@ The server API is:
 | `GET` | `/health` | Health check |
 | `POST` | `/shutdown` | Stop the server |
 
-## Common Make Targets
+## Optional Make Commands
 
-```text
-Setup
-  make setup
-  make setup-python
-  make setup-bal
+Make targets exist as shortcuts for setup, runs, publishing, screenshots, and
+cleanup. They are optional wrappers around the commands above. For the full list
+of targets and override variables, run:
 
-Run
-  make run CONNECTOR=mysql
-  make run-trigger TRIGGER=trigger.github TRIGGER_PACKAGE=ballerinax/trigger.github
-  make batch-run
-  make batch-run-dry
-
-Screenshots
-  make crop-screenshots
-  make crop-screenshots-dry
-
-Publish connectors
-  make publish-docs
-  make publish-sample
-  make publish-all
-
-Cleanup
-  make clean-artifacts
-  make clean
+```bash
+make help
 ```
 
-Run `make help` for every target and override variable.
+Common shortcuts:
+
+```bash
+make setup
+make run CONNECTOR=mysql
+make run-trigger TRIGGER=trigger.github
+make batch-run
+make clean-artifacts
+```
 
 ## Troubleshooting
 
@@ -278,9 +247,10 @@ Run `make help` for every target and override variable.
 |---------|-----|
 | API key validation failed | Set `llmApiKey` in `Config.toml` and export `ANTHROPIC_API_KEY` |
 | `claude` not found | Install Claude Code CLI and verify with `claude --version` |
-| Agent server not ready | Run `make start-agent` and inspect the Python error |
+| Batch fails because `artifacts/` exists | Move or delete `artifacts/` after reviewing it |
+| Agent server not ready | Start `python/agent_server.py` manually and inspect the Python error |
 | `uv` not found | Install uv from `https://docs.astral.sh/uv/` |
-| Python dependency error | Run `make setup-python` |
-| Ballerina build error | Run `bal clean && make setup-bal` |
-| Playwright MCP error | Run `make setup-python`; the setup installs Chromium |
-| Need to clear generated output | Run `make clean-artifacts` |
+| Python dependency error | Run `uv pip install -r python/requirements.txt` inside the venv |
+| Ballerina build error | Run `bal clean && bal build` |
+| Playwright MCP error | Run `python/.venv/bin/playwright install chromium` |
+| Need to clear generated output | Run `rm -rf artifacts` after reviewing the output |

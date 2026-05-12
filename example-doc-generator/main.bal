@@ -21,6 +21,7 @@ import ballerina/time;
 
 import wso2/example_doc_generator.agent_client;
 import wso2/example_doc_generator.ai_client;
+import wso2/example_doc_generator.batch_runner;
 import wso2/example_doc_generator.prompts;
 import wso2/example_doc_generator.utils;
 
@@ -33,25 +34,26 @@ import wso2/example_doc_generator.utils;
 # Phase 4  (Steps 11–12): Agent execution   — run agent, enforce doc structure.
 # Phase 5  (Steps 13–17): Post-processing   — inject Devant button, append examples link, crop screenshots, write run log, stop agent server.
 #
-# + modeOrConnectorName    - connector name by default, or "--trigger" to run the trigger workflow
-# + arg2                   - connector additional instructions, or trigger name when --trigger is used
-# + arg3                   - trigger package when --trigger is used
-# + arg4                   - trigger additional instructions when --trigger is used
+# + modeOrConnectorName    - connector name by default, "trigger" to run the trigger workflow, or "batch" to run a queue
+# + arg2                   - connector instructions, trigger name, or first batch option
+# + arg3                   - trigger instructions or second batch option
+# + arg4                   - third batch option
 # + return                 - an error if any step fails
 public function main(string modeOrConnectorName, string arg2 = "", string arg3 = "", string arg4 = "") returns error? {
-    boolean triggerMode = modeOrConnectorName == "--trigger" || modeOrConnectorName == "-t" ||
-        modeOrConnectorName == "trigger";
+    if modeOrConnectorName == "batch" {
+        check batch_runner:runBatch(arg2, arg3, arg4);
+        return;
+    }
+
+    boolean triggerMode = modeOrConnectorName == "trigger";
     string workflowKind = triggerMode ? "trigger" : "connector";
     string targetName = triggerMode ? arg2.trim() : modeOrConnectorName.trim();
     if targetName == "" {
-        return error(triggerMode ? "Trigger name is required. Usage: bal run -- --trigger <triggerName> <triggerPackage> [additionalInstructions]" :
+        return error(triggerMode ? "Trigger name is required. Usage: bal run -- trigger <triggerName> [additionalInstructions]" :
             "Connector name is required. Usage: bal run -- <connectorName> [additionalInstructions]");
     }
-    string triggerPackage = triggerMode ? arg3.trim() : "";
-    if triggerMode && triggerPackage == "" {
-        return error("Trigger package is required. Usage: bal run -- --trigger <triggerName> <triggerPackage> [additionalInstructions]");
-    }
-    string additionalInstructions = triggerMode ? arg4 : arg2;
+    string triggerPackage = triggerMode ? "ballerinax/" + targetName : "";
+    string additionalInstructions = triggerMode ? arg3 : arg2;
 
     utils:log("=== WSO2 Integrator Documentation Pipeline ===");
     utils:log("");
@@ -165,6 +167,10 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     utils:log("\t[INFO] " + (triggerMode ? "Trigger" : "Connector") + " name saved to " + runLogDir + "/" + targetNameFile);
     utils:log("");
 
+    agent_client:AgentCost? agentCost = ();
+    string enforcedDocPath = "";
+    error? pipelineErr = ();
+    do {
     utils:log("[STEP 7] Building system and user prompts...");
     string|error cwdResult = file:getCurrentDir();
     string projectRoot = cwdResult is string ? cwdResult : os:getEnv("PWD");
@@ -202,7 +208,7 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     // ── Phase 4: Agent execution ─────────────────────────────────────────────
 
     utils:log("[STEP 11] Running Claude agent...");
-    agent_client:AgentCost? agentCost = check agent_client:runClaudeAgent(promptPath, agentUrl);
+    agentCost = check agent_client:runClaudeAgent(promptPath, agentUrl);
     utils:log("");
 
     // ── Phase 5: Post-processing ──────────────────────────────────────────────
@@ -212,7 +218,6 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     // fresh in context with no other noise, so they are reliably applied.
     utils:log("[STEP 12] Enforcing documentation structure...");
     string workflowDocsDir = "./artifacts/workflow-docs";
-    string enforcedDocPath = "";
     file:MetaData[]|file:Error dirEntries = file:readDir(workflowDocsDir);
     if dirEntries is file:MetaData[] {
         file:MetaData? latestEntry = ();
@@ -225,27 +230,28 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
         }
         string docPath = latestEntry is file:MetaData ? latestEntry.absPath : "";
         if docPath == "" {
-            return error("No .md file found in " + workflowDocsDir + " — enforcement cannot proceed.");
+            check error("No .md file found in " + workflowDocsDir + " — enforcement cannot proceed.");
         } else {
             utils:log("\t[INFO] Found workflow doc: " + docPath);
             string|io:Error rawDoc = io:fileReadString(docPath);
-            if rawDoc is io:Error {
-                return error("Could not read workflow doc: " + rawDoc.message());
+            if rawDoc is string {
+                enforcedDocPath = docPath;
+                string enforcementSystemPrompt = triggerMode ?
+                    prompts:buildTriggerDocEnforcementSystemPrompt() :
+                    prompts:buildDocEnforcementSystemPrompt();
+                ai_client:LlmResult enfResult = check ai_client:callClaude(enforcementSystemPrompt, rawDoc, llmApiKey);
+                io:Error? writeErr = io:fileWriteString(docPath, enfResult.text);
+                if writeErr is io:Error {
+                    check error("Could not write enforced doc: " + writeErr.message());
+                }
+                docEnfUsage = enfResult.usage;
+                utils:log("\t[INFO] Documentation structure enforced successfully.");
+            } else {
+                check error("Could not read workflow doc: " + rawDoc.message());
             }
-            enforcedDocPath = docPath;
-            string enforcementSystemPrompt = triggerMode ?
-                prompts:buildTriggerDocEnforcementSystemPrompt() :
-                prompts:buildDocEnforcementSystemPrompt();
-            ai_client:LlmResult enfResult = check ai_client:callClaude(enforcementSystemPrompt, rawDoc, llmApiKey);
-            io:Error? writeErr = io:fileWriteString(docPath, enfResult.text);
-            if writeErr is io:Error {
-                return error("Could not write enforced doc: " + writeErr.message());
-            }
-            docEnfUsage = enfResult.usage;
-            utils:log("\t[INFO] Documentation structure enforced successfully.");
         }
     } else {
-        return error("Workflow docs directory not found: " + workflowDocsDir);
+        check error("Workflow docs directory not found: " + workflowDocsDir);
     }
     utils:log("");
 
@@ -338,6 +344,9 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     utils:log(string `Direct API total:${totalInputTokens} in / ${totalOutputTokens} out  |  $${totalCostUsd}`);
     utils:log(string `Agent SDK:       $${agentCostUsd}`);
     utils:log(string `COMBINED TOTAL:  $${totalCombinedCostUsd}`);
+    } on fail error e {
+        pipelineErr = e;
+    }
 
     utils:log("");
     utils:log("[STEP 17] Stopping Python agent server...");
@@ -346,6 +355,10 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
         utils:log("\t[WARN] Could not stop Python agent server: " + stopErr.message());
     } else {
         utils:log("\t[INFO] Python agent server stopped.");
+    }
+
+    if pipelineErr is error {
+        return pipelineErr;
     }
 
     utils:log("");

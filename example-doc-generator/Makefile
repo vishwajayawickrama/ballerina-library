@@ -7,7 +7,7 @@
         batch-pr-docs batch-pr-docs-dry \
         batch-commit-sample batch-commit-sample-dry \
         batch-pr-samples batch-pr-samples-dry \
-        batch-run batch-run-dry \
+        batch-run \
         publish-sample publish-sample-dry publish-sample-no-pr publish-sample-no-publish \
         publish-all publish-all-dry publish-all-no-preview publish-all-no-pr publish-all-open \
         cleanup cleanup-dry \
@@ -26,9 +26,9 @@ help:
 	@echo "  Run"
 	@echo "    make run CONNECTOR=mysql                                      Run the full pipeline for a connector"
 	@echo "    make run CONNECTOR=mysql ADDITIONAL_INSTRUCTIONS='...'        Run with per-connector guidance"
-	@echo "    make run-trigger TRIGGER=trigger.github TRIGGER_PACKAGE=ballerinax/trigger.github"
+	@echo "    make run-trigger TRIGGER=trigger.github"
 	@echo "                                                                Run the full pipeline for a trigger"
-	@echo "    make run-trigger TRIGGER=trigger.github TRIGGER_PACKAGE=ballerinax/trigger.github ADDITIONAL_INSTRUCTIONS='...'"
+	@echo "    make run-trigger TRIGGER=trigger.github ADDITIONAL_INSTRUCTIONS='...'"
 	@echo "                                                                Run a trigger with extra guidance"
 	@echo "    make start-agent      Start the Python agent server in the foreground"
 	@echo "    make stop-agent       Send shutdown request to the agent server"
@@ -78,11 +78,10 @@ help:
 	@echo "              → 'make batch-pr-samples BRANCH=...' once when all samples are committed"
 	@echo ""
 	@echo "  Batch Run (queue connectors/triggers sequentially)"
-	@echo "    make batch-run                    Run queue from batch_connectors.json"
-	@echo "    make batch-run-dry                Print planned execution order, no changes"
-	@echo "    BATCH_CONFIG=path.json            Override config file (default: batch_connectors.json)"
-	@echo "    BATCH_RUN_ARGS='--no-resume'      Extra flags: --no-resume, --create-prs, --timeout N"
-	@echo "    Workflow: 1) make batch-run  2) review artifacts_archive/  3) commit/publish approved artifacts"
+	@echo "    make batch-run                    Run queue from batch_items.json"
+	@echo "    BATCH_CONFIG=path.json            Override config file (default: batch_items.json)"
+	@echo "    BATCH_RUN_ARGS='timeout=5400'     Extra flags for the Ballerina batch runner"
+	@echo "    Workflow: 1) make batch-run  2) review artifacts_archive/  3) publish approved artifacts"
 	@echo ""
 	@echo "  Publish Sample"
 	@echo "    make publish-sample               Publish integration sample PR + delete local project + close tabs"
@@ -144,10 +143,9 @@ run:
 	bal run -- $(CONNECTOR) $(if $(ADDITIONAL_INSTRUCTIONS),"$$ADDITIONAL_INSTRUCTIONS",)
 
 run-trigger:
-	@[ "$(TRIGGER)" ] || { echo "Usage: make run-trigger TRIGGER=trigger.github TRIGGER_PACKAGE=ballerinax/trigger.github"; exit 1; }
-	@[ "$(TRIGGER_PACKAGE)" ] || { echo "Usage: make run-trigger TRIGGER=trigger.github TRIGGER_PACKAGE=ballerinax/trigger.github"; exit 1; }
-	@echo "→ Running full pipeline for trigger: $(TRIGGER) ($(TRIGGER_PACKAGE))$(if $(ADDITIONAL_INSTRUCTIONS), (with additional instructions),)"
-	bal run -- trigger $(TRIGGER) $(TRIGGER_PACKAGE) $(if $(ADDITIONAL_INSTRUCTIONS),"$$ADDITIONAL_INSTRUCTIONS",)
+	@[ "$(TRIGGER)" ] || { echo "Usage: make run-trigger TRIGGER=trigger.github"; exit 1; }
+	@echo "→ Running full pipeline for trigger: $(TRIGGER)$(if $(ADDITIONAL_INSTRUCTIONS), (with additional instructions),)"
+	bal run -- trigger $(TRIGGER) $(if $(ADDITIONAL_INSTRUCTIONS),"$$ADDITIONAL_INSTRUCTIONS",)
 
 crop-screenshots: python/.venv/.installed
 	python/.venv/bin/python python/crop_screenshots.py
@@ -388,16 +386,12 @@ batch-pr-samples-dry: python/.venv/.installed
 	$(_batch_pr_samples_cmd) --dry-run
 
 # ── Batch Run (queue multiple connectors/triggers) ────────────────────────────
-BATCH_CONFIG ?= batch_connectors.json
+BATCH_CONFIG ?= batch_items.json
 BATCH_RUN_ARGS ?=
 
-batch-run: python/.venv/.installed
+batch-run:
 	@echo "→ Running batch pipeline from $(BATCH_CONFIG)..."
-	python/.venv/bin/python python/batch_run.py --config "$(BATCH_CONFIG)" $(BATCH_RUN_ARGS)
-
-batch-run-dry: python/.venv/.installed
-	@echo "→ Batch pipeline dry run..."
-	python/.venv/bin/python python/batch_run.py --config "$(BATCH_CONFIG)" --dry-run $(BATCH_RUN_ARGS)
+	bal run -- batch config="$(BATCH_CONFIG)" $(BATCH_RUN_ARGS)
 
 # ── Publish all (docs + sample) ───────────────────────────────────────────────
 # Reuses the same override vars as the individual publish targets.

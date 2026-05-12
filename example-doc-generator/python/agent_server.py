@@ -255,7 +255,15 @@ async def get_health(request: web.Request) -> web.Response:
 
 
 async def post_shutdown(request: web.Request) -> web.Response:
-    asyncio.get_event_loop().call_soon(asyncio.get_event_loop().stop)
+    for task in list(running_tasks):
+        task.cancel()
+
+    async def stop_later() -> None:
+        if running_tasks:
+            await asyncio.gather(*running_tasks, return_exceptions=True)
+        asyncio.get_event_loop().stop()
+
+    asyncio.create_task(stop_later())
     return web.json_response({"status": "shutting down"})
 
 

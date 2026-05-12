@@ -81,6 +81,11 @@ public function runClaudeAgent(string promptPath, string agentUrl) returns Agent
         runtime:sleep(1);
         attempts += 1;
         http:Response pollResp = check agentClient->get(string `/jobs/${jobId}`);
+        if pollResp.statusCode < 200 || pollResp.statusCode >= 300 {
+            string|error errBody = pollResp.getTextPayload();
+            string detail = errBody is string ? errBody : "(unable to read body)";
+            return error(string `Agent poll failed HTTP ${pollResp.statusCode}: ${detail}`);
+        }
         json pollBody = check pollResp.getJsonPayload();
         JobStatus jobStatus = check pollBody.cloneWithType(JobStatus);
 

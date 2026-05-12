@@ -54,9 +54,9 @@ Thumbs.db
 artifacts/
 artifacts_archive/
 
-# Batch run state and config (contain local paths / user-specific connector lists)
+# Batch run config (contains local/user-specific item lists)
+batch_items.json
 batch_connectors.json
-batch_state.json
 
 # Temporary files
 tmp/

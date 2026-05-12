@@ -148,7 +148,7 @@ public function ensureExtensionInstalled(string extensionId) returns error? {
 public function startCodeServer(int port) returns error? {
     os:Process|error proc = os:exec({
         value: "code-server",
-        arguments: ["--auth", "none", "--bind-addr", "0.0.0.0:" + port.toString()]
+        arguments: ["--auth", "none", "--bind-addr", "127.0.0.1:" + port.toString()]
     });
     if proc is error {
         return error("Failed to start code-server: " + proc.message());
