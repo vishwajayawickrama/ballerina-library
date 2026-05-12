@@ -50,6 +50,18 @@ from pathlib import Path
 from dotenv import load_dotenv
 from playwright.sync_api import sync_playwright
 
+from publish_helpers import (
+    DEFAULT_BASE_BRANCH,
+    DEFAULT_SAMPLES_REPO,
+    DEFAULT_UPSTREAM_REPO,
+    dry,
+    fail,
+    info,
+    infer_fork,
+    run,
+    warn,
+)
+
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
@@ -57,48 +69,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 PROJECT_PATH_FILE = "artifacts/run-log/created-project.txt"
 PUBLISHED_SAMPLE_LOG = "artifacts/run-log/published-sample-path.txt"
 
-# Default integration-samples path: env var, then sibling of this workspace
-# Layout: <workspace>/connector-docs-automations/python/publish_sample.py
-#         <workspace>/integration-samples/
-_WORKSPACE_ROOT = Path(__file__).resolve().parent.parent.parent
-_env_samples_repo = os.environ.get("INTEGRATION_SAMPLES_REPO")
-DEFAULT_SAMPLES_REPO = (
-    Path(_env_samples_repo) if _env_samples_repo
-    else _WORKSPACE_ROOT / "integration-samples"
-)
-
 DEFAULT_CODE_SERVER_PORT = os.environ.get("CODE_SERVER_PORT", "8080")
-DEFAULT_UPSTREAM_REPO = os.environ.get("INTEGRATION_SAMPLES_UPSTREAM", "wso2/integration-samples")
-DEFAULT_BASE_BRANCH = os.environ.get("INTEGRATION_SAMPLES_BASE_BRANCH", "main")
-
-
-# ── Logging helpers ───────────────────────────────────────────────────────────
-
-def info(msg: str) -> None:
-    print(f"[INFO]  {msg}")
-
-def warn(msg: str) -> None:
-    print(f"[WARN]  {msg}", file=sys.stderr)
-
-def dry(msg: str) -> None:
-    print(f"[DRY]   {msg}")
-
-def fail(msg: str) -> None:
-    print(f"\n[ERROR] {msg}", file=sys.stderr)
-    sys.exit(1)
-
-
-# ── Subprocess helper ─────────────────────────────────────────────────────────
-
-def run(cmd: list[str], cwd: Path | None = None, check: bool = True) -> str:
-    result = subprocess.run(
-        cmd,
-        cwd=str(cwd) if cwd else None,
-        capture_output=True,
-        text=True,
-        check=check,
-    )
-    return result.stdout.strip()
 
 
 # ── Step 1: Read created project path ─────────────────────────────────────────
@@ -115,22 +86,6 @@ def read_project_path() -> Path:
         fail(f"Project directory not found: {project_path}")
     info(f"Project: {target}")
     return target
-
-
-# ── Step 2: Infer fork slug ───────────────────────────────────────────────────
-
-def infer_fork(samples_repo: Path) -> str:
-    try:
-        url = run(["git", "remote", "get-url", "origin"], cwd=samples_repo)
-        m = re.search(r"[:/]([^/:]+/[^/]+?)(?:\.git)?$", url)
-        if m:
-            return m.group(1)
-    except subprocess.CalledProcessError:
-        pass
-    fail(
-        "Could not infer fork slug from git remote 'origin'.\n"
-        "Pass --fork OWNER/REPO explicitly."
-    )
 
 
 # ── Step 3: Sync main + create branch ─────────────────────────────────────────
@@ -257,7 +212,7 @@ def commit_and_push(
     # Untracked files (??) are irrelevant — git add -- <path> never touches them.
     unrelated = [
         line for line in status.stdout.splitlines()
-        if line[:2] != "??" and line[3:] and not (
+        if line[:2] != "??" and line[0] != " " and line[3:] and not (
             line[3:].startswith(staged_path) or staged_path.startswith(line[3:])
         )
     ]

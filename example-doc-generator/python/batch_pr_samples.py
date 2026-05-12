@@ -38,18 +38,13 @@ Optional:
 """
 
 import argparse
-import os
 import re
 import subprocess
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).parent.parent / ".env")
-
 sys.path.insert(0, str(Path(__file__).parent))
-from publish_sample import (
+from publish_helpers import (
     DEFAULT_BASE_BRANCH,
     DEFAULT_SAMPLES_REPO,
     DEFAULT_UPSTREAM_REPO,
@@ -68,12 +63,12 @@ def checkout_branch(samples_repo: Path, branch: str, dry_run: bool) -> None:
     """Fetch origin and check out the given remote branch locally."""
     if dry_run:
         dry(f"git fetch origin  (in {samples_repo})")
-        dry(f"git checkout {branch}")
+        dry(f"git checkout -B {branch} origin/{branch}")
         return
     info("Fetching origin...")
     subprocess.run(["git", "fetch", "origin"], cwd=str(samples_repo), check=True)
-    info(f"Checking out branch: {branch}")
-    subprocess.run(["git", "checkout", branch], cwd=str(samples_repo), check=True)
+    info(f"Checking out branch from origin/{branch}: {branch}")
+    subprocess.run(["git", "checkout", "-B", branch, f"origin/{branch}"], cwd=str(samples_repo), check=True)
 
 
 def read_samples_from_branch(samples_repo: Path, base_branch: str) -> list[str]:

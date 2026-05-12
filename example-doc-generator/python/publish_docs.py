@@ -281,6 +281,8 @@ def extract_connector_info(content: str, artifacts_dir: Path | None = None) -> t
     if not raw:
         fail("connector-name.txt is empty. Run the Ballerina pipeline first.")
     slug = re.sub(r"[^a-z0-9.]+", "-", raw.lower()).strip("-.")
+    if not slug:
+        fail(f"Connector name from connector-name.txt does not produce a valid slug: {raw!r}")
     display_name = raw.replace("-", " ").title()
     info(f"Connector slug from file: {slug}")
 
