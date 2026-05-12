@@ -59,7 +59,7 @@ def run(cmd: list[str], cwd: Path | None = None, check: bool = True) -> str:
 
 def infer_fork(samples_repo: Path) -> str:
     try:
-        url = run(["git", "remote", "get-url", "origin"], cwd=samples_repo)
+        url = run(["git", "remote", "get-url", "origin"], cwd=samples_repo).rstrip("/")
         m = re.search(r"[:/]([^/:]+/[^/]+?)(?:\.git)?$", url)
         if m:
             return m.group(1)
