@@ -195,6 +195,65 @@ Connector publishing can still use the existing publish scripts after you
 choose the artifact or project to publish. Trigger publish helpers are not
 automated yet, so review and publish trigger artifacts manually.
 
+## Run In GitHub Actions
+
+Use the `Connector Documentation Automation` workflow from the Actions tab.
+The workflow file is:
+
+```text
+.github/workflows/connector-example-doc-generation.yml
+```
+
+Required repository/environment secrets:
+
+| Secret | Required for | Description |
+|--------|--------------|-------------|
+| `LLM_API_KEY` | generation | Anthropic API key used by Ballerina and Claude Code |
+| `DOCS_INTEGRATOR_TOKEN` | connector publishing only | Token with permission to push to the docs-integrator fork and create PRs |
+
+Workflow inputs:
+
+| Input | Value |
+|-------|-------|
+| `mode` | `connector` or `trigger` |
+| `name` | connector name like `mysql`, or trigger name like `trigger.twilio` |
+| `instructions` | optional extra guidance |
+| `publishConnector` | set to `true` only for connector runs that should publish docs |
+| `docsIntegratorFork` | required when `publishConnector` is `true` |
+| `docsIntegratorUpstream` | defaults to `wso2/docs-integrator` |
+| `docsIntegratorBaseBranch` | defaults to `main` |
+
+Examples:
+
+```text
+mode: connector
+name: mysql
+instructions:
+publishConnector: false
+```
+
+```text
+mode: trigger
+name: trigger.twilio
+instructions: Use the onReceived handler.
+publishConnector: false
+```
+
+```text
+mode: connector
+name: zoom.meetings
+instructions: Use BearerTokenConfig for authentication.
+publishConnector: true
+docsIntegratorFork: your-org/docs-integrator
+```
+
+After the workflow completes, open the workflow run summary and download the
+artifact named `example-doc-generator-<mode>-<name>`. It contains the generated
+Markdown guide, screenshots, run logs, and a README describing the output.
+
+GitHub Actions intentionally does not support batch mode. Run batch queues
+locally with `bal run -- batch config=batch_items.json`.
+
 ## Agent Server
 
 The pipeline starts and stops the agent server automatically. For debugging:
