@@ -63,7 +63,6 @@ bal run -- batch config=batch_items.json
 bal run -- batch config=batch_items.json timeout=7200
 bal run -- batch config=batch_items.json with-pr
 bal run -- crop-screenshots
-bal run -- crop-screenshots backup
 ```
 
 There is no dry-run mode for cropping or publishing. Keep execution paths direct

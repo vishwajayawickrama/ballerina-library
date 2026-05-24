@@ -42,9 +42,7 @@ import wso2/example_doc_generator.utils;
 # + return                 - an error if any step fails
 public function main(string modeOrConnectorName, string arg2 = "", string arg3 = "", string arg4 = "") returns error? {
     if modeOrConnectorName == "crop-screenshots" {
-        check utils:cropScreenshots({
-            backup: arg2 == "backup" || arg3 == "backup" || arg4 == "backup"
-        });
+        check utils:cropScreenshots();
         return;
     }
 

@@ -70,8 +70,6 @@ public type ScreenshotCropOptions record {|
     string screenshotsDir = "artifacts/screenshots";
     # Margins to crop from each screenshot.
     CropMargins margins = {};
-    # Save originals as *.orig.png.
-    boolean backup = false;
 |};
 
 # Per-file screenshot crop result.

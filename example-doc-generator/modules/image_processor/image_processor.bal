@@ -15,7 +15,6 @@
 // under the License.
 
 import ballerina/file;
-import ballerina/io;
 import ballerina/jballerina.java;
 
 # Reads image metadata.
@@ -106,9 +105,6 @@ function cropOne(string path, ScreenshotCropOptions options) returns ScreenshotC
 
     int newWidth = rightCoord - margins.left;
     int newHeight = bottomCoord - margins.top;
-    if options.backup {
-        check backupOriginal(path);
-    }
     CropResult cropResult = check cropInPlace(path, {
         x: margins.left,
         y: margins.top,
@@ -133,12 +129,6 @@ function skipped(string path, ImageInfo info, string message) returns Screenshot
         originalWidth: info.width,
         originalHeight: info.height
     };
-}
-
-function backupOriginal(string path) returns error? {
-    byte[] content = check io:fileReadBytes(path);
-    string backupPath = path.substring(0, path.length() - 4) + ".orig.png";
-    check io:fileWriteBytes(backupPath, content);
 }
 
 function nativeReadInfo(string path) returns string = @java:Method {
