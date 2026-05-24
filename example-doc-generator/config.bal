@@ -34,7 +34,3 @@ configurable string integrationSamplesRepo = "../../integration-samples";
 configurable string integrationSamplesFork = "";
 configurable string integrationSamplesUpstream = "wso2/integration-samples";
 configurable string integrationSamplesBaseBranch = "main";
-
-// Deprecated and ignored. Kept temporarily so existing Config.toml files that
-// still define this value do not break local runs.
-configurable int agentServerPort = 8765;
