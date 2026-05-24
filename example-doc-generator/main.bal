@@ -43,7 +43,6 @@ import wso2/example_doc_generator.utils;
 public function main(string modeOrConnectorName, string arg2 = "", string arg3 = "", string arg4 = "") returns error? {
     if modeOrConnectorName == "crop-screenshots" {
         check utils:cropScreenshots({
-            dryRun: arg2 == "dry-run" || arg3 == "dry-run" || arg4 == "dry-run",
             backup: arg2 == "backup" || arg3 == "backup" || arg4 == "backup"
         });
         return;

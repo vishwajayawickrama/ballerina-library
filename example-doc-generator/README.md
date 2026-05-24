@@ -137,7 +137,7 @@ Rules:
 - `type` is required and must be `connector` or `trigger`.
 - `name` is required.
 - `instructions` is optional.
-- Batch mode does not resume or dry-run.
+- Batch mode does not resume.
 - Batch mode creates docs and sample PRs only when `with-pr` is passed.
 - Batch mode fails fast if `artifacts/` already exists to avoid archiving stale output.
 - Pressing `Ctrl+C` stops the active child pipeline before the batch exits.

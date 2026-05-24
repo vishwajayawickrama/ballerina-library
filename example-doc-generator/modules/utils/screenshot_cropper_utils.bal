@@ -26,8 +26,7 @@ public function cropScreenshots(image_processor:ScreenshotCropOptions options = 
         string baseName = re `^.*/`.replaceAll(result.path, "");
         if result.status == "processed" {
             if result.width is int && result.height is int && result.originalWidth is int && result.originalHeight is int {
-                string label = result.message == "dry-run" ? "[DRY-RUN]" : "[CROP]";
-                log("\t" + label + " " + baseName + ": " + result.originalWidth.toString() + "x"
+                log("\t[CROP] " + baseName + ": " + result.originalWidth.toString() + "x"
                     + result.originalHeight.toString() + " -> " + result.width.toString()
                     + "x" + result.height.toString());
             }

@@ -106,18 +106,6 @@ function cropOne(string path, ScreenshotCropOptions options) returns ScreenshotC
 
     int newWidth = rightCoord - margins.left;
     int newHeight = bottomCoord - margins.top;
-    if options.dryRun {
-        return {
-            path: path,
-            status: "processed",
-            message: "dry-run",
-            originalWidth: info.width,
-            originalHeight: info.height,
-            width: newWidth,
-            height: newHeight
-        };
-    }
-
     if options.backup {
         check backupOriginal(path);
     }

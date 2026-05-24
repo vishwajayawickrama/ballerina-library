@@ -70,8 +70,6 @@ public type ScreenshotCropOptions record {|
     string screenshotsDir = "artifacts/screenshots";
     # Margins to crop from each screenshot.
     CropMargins margins = {};
-    # Print planned work without writing files.
-    boolean dryRun = false;
     # Save originals as *.orig.png.
     boolean backup = false;
 |};
@@ -82,7 +80,7 @@ public type ScreenshotCropFileResult record {|
     string path;
     # "processed" or "skipped".
     string status;
-    # Optional detail for skipped or dry-run entries.
+    # Optional detail for skipped entries.
     string? message = ();
     # Original image width.
     int? originalWidth = ();
