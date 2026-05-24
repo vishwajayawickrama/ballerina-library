@@ -16,6 +16,7 @@
 package org.wso2.exampledocgen.agent;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.ballerina.runtime.api.utils.StringUtils;
 import io.ballerina.runtime.api.values.BString;
@@ -36,207 +37,199 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.Queue;
 
 /**
- * Small stable Java facade for Ballerina Java interop.
+ * Thin Java adapter for Ballerina Java interop over the Claude Agent SDK.
  */
 public final class ClaudeAgentBridge {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final Path PROJECT_ROOT = Path.of("").toAbsolutePath().normalize();
-    private static final ExecutorService EXECUTOR = Executors.newCachedThreadPool(runnable -> {
-        Thread thread = new Thread(runnable, "claude-agent-bridge");
-        thread.setDaemon(true);
-        return thread;
-    });
-    private static final Map<String, Job> JOBS = new ConcurrentHashMap<>();
-
-    private static final String MODEL = "claude-sonnet-4-6";
-    private static final String SYSTEM_PROMPT = """
-            You are a WSO2 Integrator documentation automation agent.
-
-            Follow the provided execution prompt as the source of truth. It may describe a
-            connector workflow or a trigger workflow; adapt your language, screenshots,
-            artifact names, and documentation structure to the workflow type in that prompt.
-
-            Use browser automation for WSO2 Integrator UI work, and use file tools only when
-            the execution prompt explicitly asks you to inspect or edit generated project
-            files. Keep generated artifacts under the paths given in the execution prompt.
-            Do not introduce extra setup notes, environment details, or undocumented
-            workflow sections beyond what the execution prompt requires.
-            """.strip();
-
-    private static final List<String> ALLOWED_TOOLS = List.of(
-            "Bash",
-            "Read",
-            "Write",
-            "Edit",
-            "mcp__playwright__browser_navigate",
-            "mcp__playwright__browser_navigate_back",
-            "mcp__playwright__browser_click",
-            "mcp__playwright__browser_type",
-            "mcp__playwright__browser_fill_form",
-            "mcp__playwright__browser_take_screenshot",
-            "mcp__playwright__browser_run_code",
-            "mcp__playwright__browser_snapshot",
-            "mcp__playwright__browser_evaluate",
-            "mcp__playwright__browser_wait_for",
-            "mcp__playwright__browser_select_option",
-            "mcp__playwright__browser_press_key",
-            "mcp__playwright__browser_hover",
-            "mcp__playwright__browser_drag",
-            "mcp__playwright__browser_tabs",
-            "mcp__playwright__browser_close",
-            "mcp__playwright__browser_resize",
-            "mcp__playwright__browser_handle_dialog",
-            "mcp__playwright__browser_file_upload",
-            "mcp__playwright__browser_install",
-            "mcp__playwright__browser_console_messages",
-            "mcp__playwright__browser_network_requests"
-    );
 
     private ClaudeAgentBridge() {
     }
 
-    public static BString init() {
-        return StringUtils.fromString("ok");
-    }
-
-    public static BString startRun(BString promptPath) {
-        String jobId = UUID.randomUUID().toString();
-        Job job = new Job();
-        JOBS.put(jobId, job);
-        Future<?> future = EXECUTOR.submit(() -> runAgent(job, promptPath.getValue()));
-        job.future = future;
-        return StringUtils.fromString(jobId);
-    }
-
-    public static BString getJob(BString jobId) {
-        Job job = JOBS.get(jobId.getValue());
-        if (job == null) {
-            return StringUtils.fromString("{\"status\":\"error\",\"logs\":[\"[ERROR] job not found\"],\"cost\":null}");
-        }
-        return StringUtils.fromString(job.toJson());
-    }
-
-    public static void cancelRun(BString jobId) {
-        Job job = JOBS.get(jobId.getValue());
-        if (job != null) {
-            job.cancel();
-        }
-    }
-
-    public static void shutdown() {
-        for (Job job : JOBS.values()) {
-            job.cancel();
-        }
-        EXECUTOR.shutdownNow();
-    }
-
-    private static void runAgent(Job job, String promptPath) {
-        job.status = "running";
+    public static BString resolveClaudePath() {
         try {
-            Path resolved = resolvePrompt(promptPath);
-            String prompt = addRuntimeCompatibilityInstructions(Files.readString(resolved));
+            return event("resolved", Map.of("text", resolveClaudeExecutable()));
+        } catch (Exception e) {
+            return errorEvent(e);
+        }
+    }
 
-            Files.createDirectories(PROJECT_ROOT.resolve("artifacts/screenshots"));
-            Files.createDirectories(PROJECT_ROOT.resolve("artifacts/workflow-docs"));
+    public static Object openSession(BString configJson, BString prompt) {
+        try {
+            Map<String, Object> config = MAPPER.readValue(configJson.getValue(), new TypeReference<>() {
+            });
+            CLIOptions options = buildOptions(config);
+            String workingDirectory = requiredString(config, "workingDirectory");
+            String claudePath = requiredString(config, "claudePath");
+            int timeoutSeconds = intValue(config, "timeoutSeconds", 5400);
 
-            McpServerConfig playwright = new McpServerConfig.McpStdioServerConfig(
-                    "/opt/homebrew/bin/playwright-mcp",
-                    List.of(
-                            "--headless",
-                            "--viewport-size=1720,968",
-                            "--output-dir=" + PROJECT_ROOT.resolve("artifacts/screenshots"),
-                            "--output-mode",
-                            "stdout"
-                    )
-            );
-
-            CLIOptions options = CLIOptions.builder()
-                    .model(MODEL)
-                    .systemPrompt(SYSTEM_PROMPT)
-                    .tools(ALLOWED_TOOLS)
-                    .allowedTools(ALLOWED_TOOLS)
-                    .mcpServer("playwright", playwright)
-                    .permissionMode(PermissionMode.ACCEPT_EDITS)
-                    .maxBufferSize(32 * 1024 * 1024)
-                    .build();
-
-            String claudePath = resolveClaudePath(job);
-            try (ClaudeSyncClient client = ClaudeClient.sync(options)
-                    .workingDirectory(PROJECT_ROOT)
+            ClaudeSyncClient client = ClaudeClient.sync(options)
+                    .workingDirectory(Path.of(workingDirectory))
                     .claudePath(claudePath)
-                    .timeout(Duration.ofMinutes(90))
-                    .build()) {
-                for (Message message : client.connectAndReceive(prompt)) {
-                    if (Thread.currentThread().isInterrupted()) {
-                        throw new CancellationException("Agent job was cancelled");
-                    }
-                    handleMessage(job, message);
+                    .timeout(Duration.ofSeconds(timeoutSeconds))
+                    .build();
+            Iterable<Message> messages = client.connectAndReceive(prompt.getValue());
+            return new AgentSession(client, messages.iterator());
+        } catch (Exception e) {
+            return new FailedSession(e);
+        }
+    }
+
+    public static BString nextEvent(Object sessionHandle) {
+        if (sessionHandle instanceof FailedSession failedSession) {
+            return errorEvent(failedSession.exception());
+        }
+        if (!(sessionHandle instanceof AgentSession session)) {
+            return errorEvent(new IllegalArgumentException("Invalid Claude Agent SDK session handle"));
+        }
+        try {
+            if (!session.pendingEvents().isEmpty()) {
+                return toJson(session.pendingEvents().remove());
+            }
+            if (!session.messages().hasNext()) {
+                return event("done", Map.of());
+            }
+            Message message = session.messages().next();
+            List<Map<String, Object>> events = normalizeMessage(message);
+            if (events.isEmpty()) {
+                return event("system", Map.of("subtype", message.getClass().getSimpleName()));
+            }
+            session.pendingEvents().addAll(events);
+            return toJson(session.pendingEvents().remove());
+        } catch (Exception e) {
+            return errorEvent(e);
+        }
+    }
+
+    public static void closeSession(Object sessionHandle) {
+        if (sessionHandle instanceof AgentSession session) {
+            session.client().close();
+        }
+    }
+
+    private static CLIOptions buildOptions(Map<String, Object> config) {
+        CLIOptions.Builder builder = CLIOptions.builder()
+                .model(requiredString(config, "model"))
+                .systemPrompt(requiredString(config, "systemPrompt"))
+                .tools(stringList(config.get("tools")))
+                .allowedTools(stringList(config.get("allowedTools")))
+                .permissionMode(PermissionMode.valueOf(stringValue(config, "permissionMode", "ACCEPT_EDITS")))
+                .maxBufferSize(intValue(config, "maxBufferSize", 32 * 1024 * 1024));
+
+        for (Map<String, Object> mcpServer : mapList(config.get("mcpServers"))) {
+            String name = requiredString(mcpServer, "name");
+            String command = requiredString(mcpServer, "command");
+            List<String> arguments = stringList(mcpServer.get("arguments"));
+            builder.mcpServer(name, new McpServerConfig.McpStdioServerConfig(command, arguments));
+        }
+        return builder.build();
+    }
+
+    private static List<Map<String, Object>> normalizeMessage(Message message) {
+        List<Map<String, Object>> events = new ArrayList<>();
+        if (message instanceof SystemMessage systemMessage) {
+            Object sessionId = systemMessage.data() == null ? null : systemMessage.data().get("session_id");
+            Map<String, Object> event = new LinkedHashMap<>();
+            event.put("type", "init".equals(systemMessage.subtype()) ? "session" : "system");
+            event.put("subtype", systemMessage.subtype() == null ? "unknown" : systemMessage.subtype());
+            if (sessionId != null) {
+                event.put("sessionId", sessionId.toString());
+            }
+            events.add(event);
+            return events;
+        }
+
+        if (message instanceof AssistantMessage assistantMessage) {
+            for (ContentBlock block : assistantMessage.content()) {
+                if (block instanceof TextBlock textBlock) {
+                    events.add(Map.of("type", "assistant_text", "text", textBlock.text()));
+                } else if (block instanceof ToolUseBlock toolUseBlock) {
+                    Map<String, Object> event = new LinkedHashMap<>();
+                    event.put("type", "tool_use");
+                    event.put("name", toolUseBlock.name());
+                    event.put("input", jsonOrString(toolUseBlock.input()));
+                    events.add(event);
+                } else {
+                    events.add(Map.of("type", "tool_use", "name", block.getClass().getSimpleName(), "input", ""));
                 }
             }
-            if (!"error".equals(job.status)) {
-                job.status = "done";
-            }
-        } catch (CancellationException e) {
-            job.log("ERROR", e.getMessage());
-            job.status = "error";
-        } catch (Exception e) {
-            job.log("ERROR", e.getMessage() == null ? e.toString() : e.getMessage());
-            logCauseChain(job, e);
-            job.status = "error";
+            return events;
+        }
+
+        if (message instanceof ResultMessage resultMessage) {
+            Map<String, Object> event = new LinkedHashMap<>();
+            event.put("type", "result");
+            event.put("text", resultMessage.result());
+            event.put("cost", cost(resultMessage));
+            events.add(event);
+        }
+        return events;
+    }
+
+    private static Map<String, Object> cost(ResultMessage resultMessage) {
+        Map<String, Object> cost = new LinkedHashMap<>();
+        cost.put("totalCostUsd", resultMessage.totalCostUsd());
+        cost.put("inputTokens", intFromUsage(resultMessage.usage(), "input_tokens"));
+        cost.put("outputTokens", intFromUsage(resultMessage.usage(), "output_tokens"));
+        cost.put("cacheReadTokens", intFromUsage(resultMessage.usage(), "cache_read_input_tokens"));
+        cost.put("cacheWriteTokens", intFromUsage(resultMessage.usage(), "cache_creation_input_tokens"));
+        cost.put("numTurns", resultMessage.numTurns());
+        return cost;
+    }
+
+    private static int intFromUsage(Map<String, Object> usage, String key) {
+        if (usage == null) {
+            return 0;
+        }
+        Object value = usage.get(key);
+        return value instanceof Number number ? number.intValue() : 0;
+    }
+
+    private static BString event(String type, Map<String, Object> fields) {
+        Map<String, Object> event = new LinkedHashMap<>();
+        event.put("type", type);
+        event.putAll(fields);
+        return toJson(event);
+    }
+
+    private static BString errorEvent(Exception exception) {
+        String message = exception.getMessage() == null ? exception.toString() : exception.getMessage();
+        return event("error", Map.of("text", message));
+    }
+
+    private static BString toJson(Map<String, Object> event) {
+        try {
+            return StringUtils.fromString(MAPPER.writeValueAsString(event));
+        } catch (JsonProcessingException e) {
+            return StringUtils.fromString("{\"type\":\"error\",\"text\":\"Could not serialize Claude Agent SDK event\"}");
         }
     }
 
-    private static String addRuntimeCompatibilityInstructions(String prompt) {
-        return """
-                ## Runtime Tooling Compatibility
-
-                This run is executed through the in-process Java Claude agent bridge.
-                Do not look for, start, query, or depend on python/agent_server.py, /health endpoints,
-                /run endpoints, or any local REST agent server. The Ballerina pipeline has already
-                launched this agent.
-
-                Browser automation tools are exposed as Claude Code MCP tools with names like:
-                - mcp__playwright__browser_navigate
-                - mcp__playwright__browser_click
-                - mcp__playwright__browser_type
-                - mcp__playwright__browser_snapshot
-                - mcp__playwright__browser_take_screenshot
-                - mcp__playwright__browser_wait_for
-                - mcp__playwright__browser_evaluate
-
-                When the execution prompt says browser_navigate, browser_snapshot,
-                browser_take_screenshot, or similar, call the corresponding
-                mcp__playwright__... tool directly. Do not use Agent, Task, ToolSearch, WebFetch,
-                JavaScript automation files, or repository inspection to substitute for browser
-                tool calls.
-
-                """.strip() + "\n\n" + prompt;
+    private static String jsonOrString(Object input) {
+        try {
+            return input instanceof String ? (String) input : MAPPER.writeValueAsString(input);
+        } catch (JsonProcessingException e) {
+            return String.valueOf(input);
+        }
     }
 
-    private static String resolveClaudePath(Job job) throws IOException, InterruptedException {
+    private static String resolveClaudeExecutable() throws IOException, InterruptedException {
         String envPath = System.getenv("CLAUDE_CLI_PATH");
         if (envPath != null && !envPath.isBlank() && isWorkingClaudeCommand(Path.of(envPath))) {
-            job.log("INFO", "Claude CLI: " + envPath + " (CLAUDE_CLI_PATH)");
             return envPath;
         }
 
         if (canRunCommand("claude")) {
-            job.log("INFO", "Claude CLI: claude (PATH)");
             return "claude";
         }
 
@@ -253,9 +246,7 @@ public final class ClaudeAgentBridge {
 
         for (Path candidate : candidates) {
             if (isWorkingClaudeCommand(candidate)) {
-                String path = candidate.toString();
-                job.log("INFO", "Claude CLI: " + path);
-                return path;
+                return candidate.toString();
             }
         }
 
@@ -301,132 +292,55 @@ public final class ClaudeAgentBridge {
         return process.exitValue() == 0;
     }
 
-    private static void logCauseChain(Job job, Exception exception) {
-        Throwable cause = exception.getCause();
-        while (cause != null) {
-            String message = cause.getMessage();
-            if (message != null && !message.isBlank()) {
-                job.log("ERROR", cause.getClass().getSimpleName() + ": " + message);
-            }
-            cause = cause.getCause();
+    private static String requiredString(Map<String, Object> values, String key) {
+        Object value = values.get(key);
+        if (value instanceof String text && !text.isBlank()) {
+            return text;
         }
+        throw new IllegalArgumentException(key + " is required");
     }
 
-    private static Path resolvePrompt(String promptPath) throws IOException {
-        if (promptPath == null || promptPath.isBlank()) {
-            throw new IOException("prompt_path required");
-        }
-        Path resolved = Path.of(promptPath);
-        if (!resolved.isAbsolute()) {
-            resolved = PROJECT_ROOT.resolve(promptPath);
-        }
-        resolved = resolved.normalize();
-        if (!Files.exists(resolved)) {
-            throw new IOException("prompt file not found: " + resolved);
-        }
-        return resolved;
+    private static String stringValue(Map<String, Object> values, String key, String defaultValue) {
+        Object value = values.get(key);
+        return value instanceof String text && !text.isBlank() ? text : defaultValue;
     }
 
-    private static void handleMessage(Job job, Message message) {
-        if (message instanceof SystemMessage systemMessage) {
-            Object sessionId = systemMessage.data() == null ? null : systemMessage.data().get("session_id");
-            String subtype = systemMessage.subtype() == null ? "unknown" : systemMessage.subtype();
-            String label = "init".equals(subtype) ? "SESSION" : "SYSTEM";
-            String detail = sessionId == null ? "subtype=" + subtype : "id=" + sessionId;
-            job.log(label, detail);
-            return;
-        }
+    private static int intValue(Map<String, Object> values, String key, int defaultValue) {
+        Object value = values.get(key);
+        return value instanceof Number number ? number.intValue() : defaultValue;
+    }
 
-        if (message instanceof AssistantMessage assistantMessage) {
-            for (ContentBlock block : assistantMessage.content()) {
-                if (block instanceof TextBlock textBlock) {
-                    job.log("CLAUDE", textBlock.text());
-                } else if (block instanceof ToolUseBlock toolUseBlock) {
-                    job.log("TOOL", toolUseBlock.name() + " \u2192 " + truncateToolInput(toolUseBlock.input(), 500));
-                } else {
-                    job.log("TOOL", block.getClass().getSimpleName());
+    private static List<String> stringList(Object value) {
+        if (!(value instanceof List<?> list)) {
+            return List.of();
+        }
+        return list.stream().map(String::valueOf).toList();
+    }
+
+    private static List<Map<String, Object>> mapList(Object value) {
+        if (!(value instanceof List<?> list)) {
+            return List.of();
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Object item : list) {
+            if (item instanceof Map<?, ?> map) {
+                Map<String, Object> typed = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> entry : map.entrySet()) {
+                    typed.put(String.valueOf(entry.getKey()), entry.getValue());
                 }
-            }
-            return;
-        }
-
-        if (message instanceof ResultMessage resultMessage) {
-            job.log("RESULT", resultMessage.result());
-            recordCost(job, resultMessage);
-        }
-    }
-
-    private static void recordCost(Job job, ResultMessage resultMessage) {
-        int inputTokens = intFromUsage(resultMessage.usage(), "input_tokens");
-        int outputTokens = intFromUsage(resultMessage.usage(), "output_tokens");
-        int cacheReadTokens = intFromUsage(resultMessage.usage(), "cache_read_input_tokens");
-        int cacheWriteTokens = intFromUsage(resultMessage.usage(), "cache_creation_input_tokens");
-
-        job.log("USAGE", "input=" + inputTokens + " output=" + outputTokens
-                + " cache_read=" + cacheReadTokens + " cache_write=" + cacheWriteTokens);
-        if (resultMessage.totalCostUsd() != null) {
-            job.log("USAGE", String.format("total_cost=$%.6f", resultMessage.totalCostUsd()));
-        }
-        job.log("USAGE", "turns=" + resultMessage.numTurns());
-
-        Map<String, Object> cost = new LinkedHashMap<>();
-        cost.put("totalCostUsd", resultMessage.totalCostUsd());
-        cost.put("inputTokens", inputTokens);
-        cost.put("outputTokens", outputTokens);
-        cost.put("cacheReadTokens", cacheReadTokens);
-        cost.put("cacheWriteTokens", cacheWriteTokens);
-        cost.put("numTurns", resultMessage.numTurns());
-        job.cost = cost;
-    }
-
-    private static int intFromUsage(Map<String, Object> usage, String key) {
-        if (usage == null) {
-            return 0;
-        }
-        Object value = usage.get(key);
-        return value instanceof Number number ? number.intValue() : 0;
-    }
-
-    private static String truncateToolInput(Object input, int maxLength) {
-        String text;
-        try {
-            text = input instanceof String ? (String) input : MAPPER.writeValueAsString(input);
-        } catch (JsonProcessingException e) {
-            text = String.valueOf(input);
-        }
-        if (text.length() > maxLength) {
-            return text.substring(0, maxLength) + "... (truncated, " + text.length() + " total chars)";
-        }
-        return text;
-    }
-
-    private static final class Job {
-        private final List<String> logs = new ArrayList<>();
-        private volatile String status = "queued";
-        private volatile Map<String, Object> cost;
-        private volatile Future<?> future;
-
-        private synchronized void log(String label, String text) {
-            logs.add("[" + label + "] " + (text == null ? "" : text));
-        }
-
-        private void cancel() {
-            Future<?> currentFuture = future;
-            if (currentFuture != null) {
-                currentFuture.cancel(true);
+                result.add(typed);
             }
         }
+        return result;
+    }
 
-        private synchronized String toJson() {
-            Map<String, Object> snapshot = new LinkedHashMap<>();
-            snapshot.put("status", status);
-            snapshot.put("logs", List.copyOf(logs));
-            snapshot.put("cost", cost);
-            try {
-                return MAPPER.writeValueAsString(snapshot);
-            } catch (JsonProcessingException e) {
-                return "{\"status\":\"error\",\"logs\":[\"[ERROR] could not serialize job\"],\"cost\":null}";
-            }
+    private record AgentSession(ClaudeSyncClient client, Iterator<Message> messages,
+                                Queue<Map<String, Object>> pendingEvents) {
+        private AgentSession(ClaudeSyncClient client, Iterator<Message> messages) {
+            this(client, messages, new ArrayDeque<>());
         }
+    }
+
+    private record FailedSession(Exception exception) {
     }
 }

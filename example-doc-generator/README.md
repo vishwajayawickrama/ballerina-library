@@ -177,8 +177,8 @@ Batch runs move each item's `artifacts/` directory to `artifacts_archive/<slug>`
 or `artifacts_archive/<slug>_FAILED`. If a run produces no artifacts, the batch
 runner creates a `<slug>_NO_ARTIFACTS/README.txt` placeholder.
 
-At the end of a single pipeline run, the in-process Java agent bridge is shut
-down automatically.
+At the end of a single pipeline run, the in-process Claude agent SDK session is
+closed automatically.
 
 ## Publishing Connector Output
 
@@ -303,7 +303,7 @@ make clean-artifacts
 | API key validation failed | Set `llmApiKey` in `Config.toml` and export `ANTHROPIC_API_KEY` |
 | `claude` not found | Install Claude Code CLI and verify with `claude --version` |
 | Batch fails because `artifacts/` exists | Move or delete `artifacts/` after reviewing it |
-| Java agent bridge build fails | Build/install `spring-ai-community/claude-agent-sdk-java` and rerun `make build-agent-bridge` |
+| Java Claude SDK adapter build fails | Build/install `spring-ai-community/claude-agent-sdk-java` and rerun `make build-agent-bridge` |
 | `uv` not found | Install uv from `https://docs.astral.sh/uv/` |
 | Python dependency error | Run `uv pip install -r python/requirements.txt` inside the venv |
 | Ballerina build error | Run `bal clean && bal build` |

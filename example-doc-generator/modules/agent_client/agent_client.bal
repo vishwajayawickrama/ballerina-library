@@ -14,110 +14,231 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerina/lang.runtime;
-import ballerina/jballerina.java;
+import ballerina/file;
+import ballerina/io;
+import wso2/example_doc_generator.claude_agent_sdk;
 import wso2/example_doc_generator.utils;
 
-# Structured cost data returned by the agent bridge once the job completes.
-public type AgentCost record {
-    # Total USD cost reported by the Claude Agent SDK (nil if not available)
-    decimal? totalCostUsd;
-    # Input tokens consumed across the entire agent run
-    int inputTokens;
-    # Output tokens generated across the entire agent run
-    int outputTokens;
-    # Cache read tokens (prompt caching)
-    int cacheReadTokens;
-    # Cache write tokens (prompt caching)
-    int cacheWriteTokens;
-    # Number of conversation turns in the agent run (nil if not available)
-    int? numTurns;
-};
+public type AgentCost claude_agent_sdk:AgentCost;
 
-# Poll response for a running or completed in-process agent job.
-type JobStatus record {
-    # "queued", "running", "done", or "error"
-    string status;
-    # Accumulated log lines in "[LABEL] text" format
-    string[] logs;
-    # Structured cost data — present only after the job completes
-    AgentCost? cost;
-};
+const string MODEL = "claude-sonnet-4-6";
+const int TIMEOUT_SECONDS = 5400;
+const int MAX_BUFFER_SIZE = 33554432;
 
-# Initializes the Java Claude agent bridge.
+final string[] ALLOWED_TOOLS = [
+    "Bash",
+    "Read",
+    "Write",
+    "Edit",
+    "mcp__playwright__browser_navigate",
+    "mcp__playwright__browser_navigate_back",
+    "mcp__playwright__browser_click",
+    "mcp__playwright__browser_type",
+    "mcp__playwright__browser_fill_form",
+    "mcp__playwright__browser_take_screenshot",
+    "mcp__playwright__browser_run_code",
+    "mcp__playwright__browser_snapshot",
+    "mcp__playwright__browser_evaluate",
+    "mcp__playwright__browser_wait_for",
+    "mcp__playwright__browser_select_option",
+    "mcp__playwright__browser_press_key",
+    "mcp__playwright__browser_hover",
+    "mcp__playwright__browser_drag",
+    "mcp__playwright__browser_tabs",
+    "mcp__playwright__browser_close",
+    "mcp__playwright__browser_resize",
+    "mcp__playwright__browser_handle_dialog",
+    "mcp__playwright__browser_file_upload",
+    "mcp__playwright__browser_install",
+    "mcp__playwright__browser_console_messages",
+    "mcp__playwright__browser_network_requests"
+];
+
+const string SYSTEM_PROMPT = string `You are a WSO2 Integrator documentation automation agent.
+
+Follow the provided execution prompt as the source of truth. It may describe a
+connector workflow or a trigger workflow; adapt your language, screenshots,
+artifact names, and documentation structure to the workflow type in that prompt.
+
+Use browser automation for WSO2 Integrator UI work, and use file tools only when
+the execution prompt explicitly asks you to inspect or edit generated project
+files. Keep generated artifacts under the paths given in the execution prompt.
+Do not introduce extra setup notes, environment details, or undocumented
+workflow sections beyond what the execution prompt requires.`;
+
+# Initializes the Claude agent SDK wrapper.
 #
-# + return - an error if the Java bridge could not be loaded
+# + return - an error if the Java SDK adapter could not resolve Claude Code
 public function initAgentBridge() returns error? {
-    string result = javaBridgeInit();
-    if result != "ok" {
-        return error("Java agent bridge returned unexpected init result: " + result);
-    }
+    string claudePath = check claude_agent_sdk:resolveClaudePath();
+    utils:log("\t[INFO] Claude CLI: " + claudePath);
 }
 
-# Submits the execution prompt to the Java agent bridge and streams its log
-# lines to the console as they arrive, blocking until the job is marked done.
+# Runs Claude Agent SDK from Ballerina using the internal SDK module.
 #
 # + promptPath - absolute or relative path to the generated execution prompt file
 # + return     - AgentCost if available, nil if cost data was absent, or an error
 public function runClaudeAgent(string promptPath) returns AgentCost?|error {
-    string jobId = javaBridgeStartRun(promptPath);
-    utils:log("\t[INFO] Job submitted: " + jobId);
+    string prompt = check readPrompt(promptPath);
+    prompt = addRuntimeCompatibilityInstructions(prompt);
 
-    // Poll every second; print new log lines as they arrive
-    // Limit to 5400 attempts (90 minutes) to prevent infinite hangs.
-    int lastLogCount = 0;
-    int attempts = 0;
-    int maxAttempts = 5400;
-    while attempts < maxAttempts {
-        runtime:sleep(1);
-        attempts += 1;
-        string jobJson = javaBridgeGetJob(jobId);
-        json pollBody = check jobJson.fromJsonString();
-        JobStatus jobStatus = check pollBody.cloneWithType(JobStatus);
+    check ensureAgentArtifactDirs();
 
-        int i = lastLogCount;
-        while i < jobStatus.logs.length() {
-            utils:log("\t" + jobStatus.logs[i]);
-            i += 1;
+    string|error cwdResult = file:getCurrentDir();
+    string projectRoot = check cwdResult;
+    string claudePath = check claude_agent_sdk:resolveClaudePath();
+    utils:log("\t[INFO] Claude CLI: " + claudePath);
+
+    claude_agent_sdk:AgentConfig config = {
+        model: MODEL,
+        systemPrompt: SYSTEM_PROMPT,
+        tools: ALLOWED_TOOLS,
+        allowedTools: ALLOWED_TOOLS,
+        mcpServers: [
+            {
+                name: "playwright",
+                command: "/opt/homebrew/bin/playwright-mcp",
+                arguments: [
+                    "--headless",
+                    "--viewport-size=1720,968",
+                    "--output-dir=" + projectRoot + "/artifacts/screenshots",
+                    "--output-mode",
+                    "stdout"
+                ]
+            }
+        ],
+        workingDirectory: projectRoot,
+        claudePath: claudePath,
+        timeoutSeconds: TIMEOUT_SECONDS,
+        maxBufferSize: MAX_BUFFER_SIZE,
+        permissionMode: "ACCEPT_EDITS"
+    };
+
+    claude_agent_sdk:AgentSession session = check claude_agent_sdk:openSession(config, prompt);
+    AgentCost? cost = ();
+    error? runErr = ();
+    do {
+        while true {
+            claude_agent_sdk:AgentEvent event = check claude_agent_sdk:nextEvent(session);
+            if event.'type == "done" {
+                utils:log("\t[INFO] Claude agent finished.");
+                break;
+            }
+            if event.'type == "result" {
+                logResultEvent(event);
+                cost = event.cost;
+                continue;
+            }
+            logAgentEvent(event);
         }
-        lastLogCount = jobStatus.logs.length();
+    } on fail error e {
+        runErr = e;
+    }
+    claude_agent_sdk:closeSession(session);
+    if runErr is error {
+        return runErr;
+    }
+    return cost;
+}
 
-        if jobStatus.status == "done" {
-            utils:log("\t[INFO] Claude agent finished.");
-            return jobStatus.cost;
+# Releases agent SDK resources.
+#
+# + return - nil; retained for the existing pipeline lifecycle
+public function stopAgentBridge() returns error? {
+}
+
+function readPrompt(string promptPath) returns string|error {
+    if promptPath.trim() == "" {
+        return error("prompt_path required");
+    }
+    string|io:Error prompt = io:fileReadString(promptPath);
+    if prompt is io:Error {
+        return error("Could not read prompt file: " + prompt.message());
+    }
+    return prompt;
+}
+
+function ensureAgentArtifactDirs() returns error? {
+    file:Error? screenshotErr = file:createDir("./artifacts/screenshots", file:RECURSIVE);
+    if screenshotErr is file:Error {
+        return error("Could not create screenshots directory: " + screenshotErr.message());
+    }
+    file:Error? docsErr = file:createDir("./artifacts/workflow-docs", file:RECURSIVE);
+    if docsErr is file:Error {
+        return error("Could not create workflow docs directory: " + docsErr.message());
+    }
+}
+
+function addRuntimeCompatibilityInstructions(string prompt) returns string {
+    return string `## Runtime Tooling Compatibility
+
+This run is executed through the in-process Ballerina Claude agent SDK wrapper.
+Do not look for, start, query, or depend on python/agent_server.py, /health endpoints,
+/run endpoints, or any local REST agent server. The Ballerina pipeline has already
+launched this agent.
+
+Browser automation tools are exposed as Claude Code MCP tools with names like:
+- mcp__playwright__browser_navigate
+- mcp__playwright__browser_click
+- mcp__playwright__browser_type
+- mcp__playwright__browser_snapshot
+- mcp__playwright__browser_take_screenshot
+- mcp__playwright__browser_wait_for
+- mcp__playwright__browser_evaluate
+
+When the execution prompt says browser_navigate, browser_snapshot,
+browser_take_screenshot, or similar, call the corresponding
+mcp__playwright__... tool directly. Do not use Agent, Task, ToolSearch, WebFetch,
+JavaScript automation files, or repository inspection to substitute for browser
+tool calls.
+
+${prompt}`;
+}
+
+function logAgentEvent(claude_agent_sdk:AgentEvent event) {
+    if event.'type == "session" {
+        string detail = event.sessionId is string ? "id=" + event.sessionId.toString() :
+            "subtype=" + (event.subtype ?: "unknown");
+        utils:log("\t[SESSION] " + detail);
+        return;
+    }
+    if event.'type == "system" {
+        utils:log("\t[SYSTEM] subtype=" + (event.subtype ?: "unknown"));
+        return;
+    }
+    if event.'type == "assistant_text" {
+        utils:log("\t[CLAUDE] " + (event.text ?: ""));
+        return;
+    }
+    if event.'type == "tool_use" {
+        utils:log("\t[TOOL] " + (event.name ?: "unknown") + " -> " + truncateToolInput(event.input ?: "", 500));
+        return;
+    }
+    utils:log("\t[" + event.'type.toUpperAscii() + "] " + (event.text ?: ""));
+}
+
+function logResultEvent(claude_agent_sdk:AgentEvent event) {
+    utils:log("\t[RESULT] " + (event.text ?: ""));
+    AgentCost? cost = event.cost;
+    if cost is AgentCost {
+        utils:log("\t[USAGE] input=" + cost.inputTokens.toString()
+            + " output=" + cost.outputTokens.toString()
+            + " cache_read=" + cost.cacheReadTokens.toString()
+            + " cache_write=" + cost.cacheWriteTokens.toString());
+        decimal? totalCost = cost.totalCostUsd;
+        if totalCost is decimal {
+            utils:log("\t[USAGE] total_cost=$" + totalCost.toString());
         }
-        if jobStatus.status == "error" {
-            return error(string `Agent job ${jobId} failed. Check agent logs for details.`);
+        int? turns = cost.numTurns;
+        if turns is int {
+            utils:log("\t[USAGE] turns=" + turns.toString());
         }
     }
-    return error(string `Agent job ${jobId} did not complete within ${maxAttempts} seconds.`);
 }
 
-# Requests the Java agent bridge to cancel active jobs and release executor resources.
-# This is a best-effort cleanup step; callers can log the returned error without
-# failing the completed pipeline.
-#
-# + return - an error if the shutdown request could not be completed
-public function stopAgentBridge() returns error? {
-    javaBridgeShutdown();
+function truncateToolInput(string text, int maxLength) returns string {
+    if text.length() <= maxLength {
+        return text;
+    }
+    return text.substring(0, maxLength) + "... (truncated, " + text.length().toString() + " total chars)";
 }
-
-function javaBridgeInit() returns string = @java:Method {
-    'class: "org.wso2.exampledocgen.agent.ClaudeAgentBridge",
-    name: "init"
-} external;
-
-function javaBridgeStartRun(string promptPath) returns string = @java:Method {
-    'class: "org.wso2.exampledocgen.agent.ClaudeAgentBridge",
-    name: "startRun"
-} external;
-
-function javaBridgeGetJob(string jobId) returns string = @java:Method {
-    'class: "org.wso2.exampledocgen.agent.ClaudeAgentBridge",
-    name: "getJob"
-} external;
-
-function javaBridgeShutdown() = @java:Method {
-    'class: "org.wso2.exampledocgen.agent.ClaudeAgentBridge",
-    name: "shutdown"
-} external;

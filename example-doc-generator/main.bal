@@ -29,10 +29,10 @@ import wso2/example_doc_generator.utils;
 # Entry point for the full automation pipeline.
 #
 # Phase 1  (Steps 1–2):  Pre-flight validation — API key and agent runtime.
-# Phase 2  (Steps 3–6):  Infrastructure     — code-server, extension check, and Java agent bridge.
+# Phase 2  (Steps 3–6):  Infrastructure     — code-server, extension check, and Claude agent SDK.
 # Phase 3  (Steps 7–10): Prompt generation  — build, call Claude, format, save.
 # Phase 4  (Steps 11–12): Agent execution   — run agent, enforce doc structure.
-# Phase 5  (Steps 13–17): Post-processing   — inject Devant button, append examples link, crop screenshots, write run log, stop agent bridge.
+# Phase 5  (Steps 13–17): Post-processing   — inject Devant button, append examples link, crop screenshots, write run log, stop agent SDK.
 #
 # + modeOrConnectorName    - connector name by default, "trigger" to run the trigger workflow, "prompt" to reuse an execution prompt, or "batch" to run a queue
 # + arg2                   - connector instructions, trigger name, execution prompt path, or first batch option
@@ -94,7 +94,7 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     utils:log("");
 
     utils:log("[STEP 2] Skipping Claude Code CLI pre-flight check...");
-    utils:log("\t[INFO] Java agent bridge will resolve the Claude runtime during agent execution.");
+    utils:log("\t[INFO] Claude agent SDK will resolve the Claude runtime during agent execution.");
     utils:log("");
 
     // ── Phase 2: Infrastructure ─────────────────────────────────────────────
@@ -134,9 +134,9 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     }
     utils:log("");
 
-    utils:log("[STEP 6] Initializing Java agent bridge...");
+    utils:log("[STEP 6] Initializing Claude agent SDK...");
     check agent_client:initAgentBridge();
-    utils:log("\t[INFO] Java agent bridge initialized.");
+    utils:log("\t[INFO] Claude agent SDK initialized.");
     utils:log("");
 
     // ── Phase 3: Prompt generation ──────────────────────────────────────────
@@ -367,12 +367,12 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     }
 
     utils:log("");
-    utils:log("[STEP 17] Stopping Java agent bridge...");
+    utils:log("[STEP 17] Stopping Claude agent SDK...");
     error? stopErr = agent_client:stopAgentBridge();
     if stopErr is error {
-        utils:log("\t[WARN] Could not stop Java agent bridge: " + stopErr.message());
+        utils:log("\t[WARN] Could not stop Claude agent SDK: " + stopErr.message());
     } else {
-        utils:log("\t[INFO] Java agent bridge stopped.");
+        utils:log("\t[INFO] Claude agent SDK stopped.");
     }
 
     if pipelineErr is error {

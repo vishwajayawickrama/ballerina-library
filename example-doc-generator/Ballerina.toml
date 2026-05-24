@@ -9,100 +9,100 @@ observabilityIncluded = true
 
 [[platform.java21.dependency]]
 path = "target/agent-bridge/agent-bridge.jar"
-modules = ["agent_client"]
+modules = ["claude_agent_sdk"]
 
 [[platform.java21.dependency]]
 groupId = "org.springaicommunity"
 artifactId = "claude-code-sdk"
 version = "1.0.0-SNAPSHOT"
-modules = ["agent_client"]
+modules = ["claude_agent_sdk"]
 
 [[platform.java21.dependency]]
 groupId = "org.zeroturnaround"
 artifactId = "zt-exec"
 version = "1.12"
-modules = ["agent_client"]
+modules = ["claude_agent_sdk"]
 
 [[platform.java21.dependency]]
 groupId = "com.fasterxml.jackson.core"
 artifactId = "jackson-core"
 version = "2.17.2"
-modules = ["agent_client"]
+modules = ["claude_agent_sdk"]
 
 [[platform.java21.dependency]]
 groupId = "com.fasterxml.jackson.core"
 artifactId = "jackson-databind"
 version = "2.17.2"
-modules = ["agent_client"]
+modules = ["claude_agent_sdk"]
 
 [[platform.java21.dependency]]
 groupId = "com.fasterxml.jackson.core"
 artifactId = "jackson-annotations"
 version = "2.17.2"
-modules = ["agent_client"]
+modules = ["claude_agent_sdk"]
 
 [[platform.java21.dependency]]
 groupId = "com.fasterxml.jackson.dataformat"
 artifactId = "jackson-dataformat-yaml"
 version = "2.18.3"
-modules = ["agent_client"]
+modules = ["claude_agent_sdk"]
 
 [[platform.java21.dependency]]
 groupId = "io.projectreactor"
 artifactId = "reactor-core"
 version = "3.6.10"
-modules = ["agent_client"]
+modules = ["claude_agent_sdk"]
 
 [[platform.java21.dependency]]
 groupId = "org.reactivestreams"
 artifactId = "reactive-streams"
 version = "1.0.4"
-modules = ["agent_client"]
+modules = ["claude_agent_sdk"]
 
 [[platform.java21.dependency]]
 groupId = "org.slf4j"
 artifactId = "slf4j-api"
 version = "2.0.9"
-modules = ["agent_client"]
+modules = ["claude_agent_sdk"]
 
 [[platform.java21.dependency]]
 groupId = "io.modelcontextprotocol.sdk"
 artifactId = "mcp"
 version = "0.15.0"
-modules = ["agent_client"]
+modules = ["claude_agent_sdk"]
 
 [[platform.java21.dependency]]
 groupId = "io.modelcontextprotocol.sdk"
 artifactId = "mcp-core"
 version = "0.15.0"
-modules = ["agent_client"]
+modules = ["claude_agent_sdk"]
 
 [[platform.java21.dependency]]
 groupId = "io.modelcontextprotocol.sdk"
 artifactId = "mcp-json"
 version = "0.15.0"
-modules = ["agent_client"]
+modules = ["claude_agent_sdk"]
 
 [[platform.java21.dependency]]
 groupId = "io.modelcontextprotocol.sdk"
 artifactId = "mcp-json-jackson2"
 version = "0.15.0"
-modules = ["agent_client"]
+modules = ["claude_agent_sdk"]
 
 [[platform.java21.dependency]]
 groupId = "com.networknt"
 artifactId = "json-schema-validator"
 version = "1.5.7"
-modules = ["agent_client"]
+modules = ["claude_agent_sdk"]
 
 [[platform.java21.dependency]]
 groupId = "com.ethlo.time"
 artifactId = "itu"
 version = "1.10.3"
-modules = ["agent_client"]
+modules = ["claude_agent_sdk"]
 
 [[platform.java21.dependency]]
 groupId = "org.yaml"
 artifactId = "snakeyaml"
 version = "2.3"
-modules = ["agent_client"]
+modules = ["claude_agent_sdk"]
