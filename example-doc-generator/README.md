@@ -51,7 +51,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 3. Build the Ballerina app:
 
 ```bash
-gradle -p java/native-bridge copyNativeBridgeJar
+gradle -p native-bridge copyNativeBridgeJar
 bal build
 ```
 
@@ -226,7 +226,7 @@ The pipeline calls the Claude agent through Ballerina Java interop. Build the
 bridge before `bal build`:
 
 ```bash
-gradle -p java/native-bridge copyNativeBridgeJar
+gradle -p native-bridge copyNativeBridgeJar
 ```
 
 The bridge also provides image processing through Java ImageIO. It expects
@@ -236,7 +236,7 @@ first.
 
 If VS Code still reports that `ClaudeAgentBridge.java` is not on the classpath,
 run `Java: Clean Java Language Server Workspace` from the command palette and
-reload the window. The Java Gradle project lives under `java/native-bridge`.
+reload the window. The Java Gradle project lives under `native-bridge`.
 
 ## Troubleshooting
 
@@ -246,7 +246,7 @@ reload the window. The Java Gradle project lives under `java/native-bridge`.
 | `claude` not found | Install Claude Code CLI and verify with `claude --version` |
 | `npx` not found | Install Node.js/npm and verify with `npx --version` |
 | Batch fails because `artifacts/` exists | Move or delete `artifacts/` after reviewing it |
-| Java native bridge build fails | Ensure Gradle can resolve dependencies from Maven local/Central, then rerun `gradle -p java/native-bridge copyNativeBridgeJar` |
+| Java native bridge build fails | Ensure Gradle can resolve dependencies from Maven local/Central, then rerun `gradle -p native-bridge copyNativeBridgeJar` |
 | PR creation fails | Verify `gh auth status` and both publishing fork remotes |
 | Ballerina build error | Run `bal clean && bal build` |
 | Playwright MCP error | Verify with `npx --yes @playwright/mcp@latest --help` |

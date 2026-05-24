@@ -42,7 +42,7 @@ tasks.jar {
 tasks.register("copyNativeBridgeJar", Copy) {
     dependsOn tasks.jar
     from tasks.jar
-    into layout.projectDirectory.dir("../../target/native-bridge")
+    into layout.projectDirectory.dir("../target/native-bridge")
     rename { "native-bridge.jar" }
 }
 

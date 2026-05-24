@@ -27,7 +27,7 @@ Core pieces:
 | Prompt builders | `modules/prompts/` |
 | Screenshot/image processing | `modules/image_processor/` and `modules/utils/screenshot_cropper_utils.bal` |
 | Docs and sample publishing | `modules/docs_publisher/` |
-| Java interop bridge | `java/native-bridge/` |
+| Java interop bridge | `native-bridge/` |
 
 Every Ballerina module should keep module-specific type definitions in its own
 `types.bal`.
@@ -39,7 +39,7 @@ Use `Config.toml` for Ballerina configuration. Do not use `.env` or
 
 ```bash
 cp Config.toml.example Config.toml
-gradle -p java/native-bridge copyNativeBridgeJar
+gradle -p native-bridge copyNativeBridgeJar
 bal build
 ```
 
@@ -91,7 +91,7 @@ that support is added deliberately.
 
 - Do not add Python scripts, Python dependencies, `uv`, or Makefile targets.
 - Do not add root Gradle wrappers/settings just to build the Java bridge; use
-  `gradle -p java/native-bridge ...`.
+  `gradle -p native-bridge ...`.
 - Do not add `.env` configuration. Use Ballerina configurables and
   `Config.toml.example`.
 - Do not pass `--trigger` to `bal run`; use `bal run -- trigger <triggerName>`.
@@ -107,7 +107,7 @@ that support is added deliberately.
 For code changes, run the narrowest useful checks:
 
 ```bash
-gradle -p java/native-bridge copyNativeBridgeJar
+gradle -p native-bridge copyNativeBridgeJar
 bal build
 ```
 
@@ -122,7 +122,7 @@ single-run and batch `with-pr` paths still pass the correct repo config.
 | `claude` not found | Install Claude Code CLI and verify with `claude --version` |
 | `npx` not found | Install Node.js/npm and verify with `npx --version` |
 | Batch fails because `artifacts/` exists | Move or delete `artifacts/` after reviewing it |
-| Java native bridge build fails | Ensure Gradle can resolve dependencies from Maven local/Central, then rerun `gradle -p java/native-bridge copyNativeBridgeJar` |
+| Java native bridge build fails | Ensure Gradle can resolve dependencies from Maven local/Central, then rerun `gradle -p native-bridge copyNativeBridgeJar` |
 | PR creation fails | Verify `gh auth status` and both publishing fork remotes |
 | Ballerina build error | Run `bal clean && bal build` |
 | Playwright MCP error | Verify with `npx --yes @playwright/mcp@latest --help` |
