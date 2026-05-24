@@ -181,6 +181,25 @@ batch branches and create PRs at the end:
 bal run -- batch config=batch_items.json with-pr
 ```
 
+## PRs From Existing Artifacts
+
+To create docs and sample PRs from an existing single-run `artifacts/`
+directory without running the generator again:
+
+```bash
+bal run -- only-pr
+```
+
+To publish successful connector archives from `artifacts_archive/` into the
+shared batch branches and create the batch PRs:
+
+```bash
+bal run -- only-batch-pr
+```
+
+`only-batch-pr` skips failed archives, no-artifact placeholders, trigger
+archives, and folders that do not contain connector run-log metadata.
+
 ## What a Run Produces
 
 Single runs write to `artifacts/`:
@@ -251,3 +270,6 @@ reload the window. The Java Gradle project lives under `native-bridge`.
 | Ballerina build error | Run `bal clean && bal build` |
 | Playwright MCP error | Verify with `npx --yes @playwright/mcp@latest --help` |
 | Need to clear generated output | Run `rm -rf artifacts` after reviewing the output |
+
+The pipeline removes `.yaml` and `.yml` files from screenshot directories after
+cropping, before publishing or archiving artifacts.

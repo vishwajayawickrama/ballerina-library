@@ -43,11 +43,23 @@ import wso2/example_doc_generator.utils;
 public function main(string modeOrConnectorName, string arg2 = "", string arg3 = "", string arg4 = "") returns error? {
     if modeOrConnectorName == "crop-screenshots" {
         check utils:cropScreenshots();
+        int deletedYamlFiles = check utils:deleteScreenshotYamlFiles();
+        utils:log("\t[INFO] Removed screenshot YAML files: " + deletedYamlFiles.toString());
         return;
     }
 
     if modeOrConnectorName == "batch" {
         check batch_runner:runBatch(arg2, arg3, arg4, docsPublishOptions());
+        return;
+    }
+
+    if modeOrConnectorName == "only-pr" {
+        check publishExistingArtifacts();
+        return;
+    }
+
+    if modeOrConnectorName == "only-batch-pr" {
+        check batch_runner:publishArchivedBatch(docsPublishOptions());
         return;
     }
 
@@ -320,6 +332,8 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     } else {
         utils:log("\t[INFO] Screenshots cropped successfully.");
     }
+    int deletedYamlFiles = check utils:deleteScreenshotYamlFiles();
+    utils:log("\t[INFO] Removed screenshot YAML files: " + deletedYamlFiles.toString());
     utils:log("");
 
     // ── Phase 5 (cont.): Finalise ─────────────────────────────────────────────
@@ -396,6 +410,13 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
         pipelineErr = e;
     }
 
+    if pipelineErr is error {
+        error? cleanupErr = cleanupScreenshotYamlFiles();
+        if cleanupErr is error {
+            utils:log("\t[WARN] Could not remove screenshot YAML files: " + cleanupErr.message());
+        }
+    }
+
     utils:log("");
     utils:log("[STEP " + (publishWithPr ? "18" : "17") + "] Stopping Claude agent SDK...");
     error? stopErr = agent_client:stopAgentBridge();
@@ -412,6 +433,35 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     utils:log("");
     utils:log("=== Pipeline Complete ===");
     utils:log("Artifacts saved under '" + utils:OUTPUT_DIR + "'.");
+}
+
+function publishExistingArtifacts() returns error? {
+    utils:log("=== WSO2 Integrator Documentation Pipeline ===");
+    utils:log("[INFO] Mode: only-pr");
+    utils:log("[INFO] Publishing existing artifacts from ./artifacts");
+    utils:log("");
+
+    int deletedYamlFiles = check utils:deleteScreenshotYamlFiles();
+    utils:log("[INFO] Removed screenshot YAML files: " + deletedYamlFiles.toString());
+
+    docs_publisher:PublishAllResult publishResult = check docs_publisher:publishDocsAndSamples(docsPublishOptions(true));
+    utils:log("[INFO] Published docs branch: " + publishResult.docs.branch);
+    string? docsPrUrl = publishResult.docs.prUrl;
+    if docsPrUrl is string {
+        utils:log("[INFO] Docs pull request: " + docsPrUrl);
+    }
+    utils:log("[INFO] Published sample branch: " + publishResult.sample.branch);
+    string? samplePrUrl = publishResult.sample.prUrl;
+    if samplePrUrl is string {
+        utils:log("[INFO] Sample pull request: " + samplePrUrl);
+    }
+    utils:log("");
+    utils:log("=== PR Creation Complete ===");
+}
+
+function cleanupScreenshotYamlFiles() returns error? {
+    int deletedYamlFiles = check utils:deleteScreenshotYamlFiles();
+    utils:log("\t[INFO] Removed screenshot YAML files: " + deletedYamlFiles.toString());
 }
 
 function docsPublishOptions(boolean createPr = false) returns docs_publisher:PublishOptions {

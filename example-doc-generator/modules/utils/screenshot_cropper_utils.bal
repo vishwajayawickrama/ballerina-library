@@ -14,6 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import ballerina/file;
+
 import wso2/example_doc_generator.image_processor;
 
 # Crops generated screenshots and logs a compact summary.
@@ -40,4 +42,32 @@ public function cropScreenshots(image_processor:ScreenshotCropOptions options = 
     }
     log("\t[INFO] Screenshot crop summary: processed=" + summary.processed.toString()
         + " skipped=" + summary.skipped.toString());
+}
+
+# Deletes YAML files that may be created alongside screenshots.
+#
+# + screenshotsDir - directory containing generated screenshots
+# + return - number of deleted YAML files, or an error
+public function deleteScreenshotYamlFiles(string screenshotsDir = "artifacts/screenshots") returns int|error {
+    boolean|file:Error dirExists = file:test(screenshotsDir, file:EXISTS);
+    if dirExists is file:Error {
+        return error("Could not check screenshots directory: " + dirExists.message());
+    }
+    if !dirExists {
+        return 0;
+    }
+
+    file:MetaData[] entries = check file:readDir(screenshotsDir);
+    int deleted = 0;
+    foreach file:MetaData entry in entries {
+        if entry.dir {
+            continue;
+        }
+        string lowerPath = entry.absPath.toLowerAscii();
+        if lowerPath.endsWith(".yaml") || lowerPath.endsWith(".yml") {
+            check file:remove(entry.absPath);
+            deleted += 1;
+        }
+    }
+    return deleted;
 }

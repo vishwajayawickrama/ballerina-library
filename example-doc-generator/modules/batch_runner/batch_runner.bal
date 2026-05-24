@@ -20,6 +20,7 @@ import ballerina/os;
 import ballerina/time;
 
 import wso2/example_doc_generator.docs_publisher;
+import wso2/example_doc_generator.utils;
 
 const string DEFAULT_CONFIG = "batch_items.json";
 const string ARTIFACTS_DIR = "./artifacts";
@@ -168,6 +169,68 @@ public function runBatch(string arg1 = "", string arg2 = "", string arg3 = "",
     }
 }
 
+# Publishes existing successful connector archives to batch branches and creates PRs.
+#
+# + publishOptions - docs and samples publishing options
+# + return - an error if no publishable archives are found or publishing fails
+public function publishArchivedBatch(docs_publisher:PublishOptions publishOptions = {}) returns error? {
+    boolean|file:Error archiveExists = file:test(ARCHIVE_DIR, file:EXISTS);
+    if archiveExists is file:Error {
+        return error("Could not check artifacts archive directory: " + archiveExists.message());
+    }
+    if !archiveExists {
+        return error("artifacts_archive/ directory not found.");
+    }
+
+    file:MetaData[] entries = check file:readDir(ARCHIVE_DIR);
+    int published = 0;
+
+    io:println("======================================================================");
+    io:println("BATCH PR FROM ARCHIVED ARTIFACTS");
+    io:println("Archive: " + ARCHIVE_DIR);
+    io:println("======================================================================");
+
+    foreach file:MetaData entry in entries {
+        if !entry.dir || !isSuccessfulArchive(entry.absPath) || !isConnectorArchive(entry.absPath) {
+            continue;
+        }
+
+        io:println("[INFO] Publishing archived connector artifacts: " + entry.absPath);
+        int deletedYamlFiles = check utils:deleteScreenshotYamlFiles(entry.absPath + "/screenshots");
+        io:println("[INFO] Removed screenshot YAML files: " + deletedYamlFiles.toString());
+        docs_publisher:PublishAllResult publishResult = check docs_publisher:publishDocsAndSamples({
+            artifactsDir: entry.absPath,
+            docsRepo: publishOptions.docsRepo,
+            forkSlug: publishOptions.forkSlug,
+            upstream: publishOptions.upstream,
+            baseBranch: publishOptions.baseBranch,
+            category: publishOptions.category,
+            branch: publishOptions.branch,
+            samplesRepo: publishOptions.samplesRepo,
+            samplesForkSlug: publishOptions.samplesForkSlug,
+            samplesUpstream: publishOptions.samplesUpstream,
+            samplesBaseBranch: publishOptions.samplesBaseBranch,
+            samplesBranch: publishOptions.samplesBranch,
+            batchBranch: true
+        });
+        io:println("[INFO] Published docs branch: " + publishResult.docs.branch);
+        io:println("[INFO] Published sample branch: " + publishResult.sample.branch);
+        published += 1;
+    }
+
+    if published == 0 {
+        return error("No successful connector archives found under artifacts_archive/.");
+    }
+
+    string batchBranch = publishOptions.branch ?: "docs/connector-docs";
+    string prUrl = check docs_publisher:createBatchPullRequest(batchBranch, publishOptions);
+    io:println("[INFO] Batch docs pull request: " + prUrl);
+    string sampleBatchBranch = publishOptions.samplesBranch ?: "samples/connector-samples";
+    string samplePrUrl = check docs_publisher:createBatchSamplePullRequest(sampleBatchBranch, publishOptions);
+    io:println("[INFO] Batch sample pull request: " + samplePrUrl);
+    io:println("[INFO] Published archived connector count: " + published.toString());
+}
+
 function prepareBatchArtifacts() returns error? {
     boolean|file:Error exists = file:test(ARTIFACTS_DIR, file:EXISTS);
     if exists is file:Error {
@@ -176,6 +239,17 @@ function prepareBatchArtifacts() returns error? {
     if exists {
         return error("Existing artifacts/ directory found. Move or delete it before running batch mode.");
     }
+}
+
+function isSuccessfulArchive(string archivePath) returns boolean {
+    string name = baseName(archivePath);
+    return !name.endsWith("_FAILED") && !name.includes("_FAILED_") &&
+        !name.endsWith("_NO_ARTIFACTS") && !name.includes("_NO_ARTIFACTS_");
+}
+
+function isConnectorArchive(string archivePath) returns boolean {
+    boolean|file:Error result = file:test(archivePath + "/run-log/connector-name.txt", file:EXISTS);
+    return result is boolean && result;
 }
 
 function validateItems(BatchItem[] items) returns error? {
@@ -481,4 +555,9 @@ function joinStrings(string[] values, string separator) returns string {
         result += values[i];
     }
     return result;
+}
+
+function baseName(string path) returns string {
+    int? index = path.lastIndexOf("/");
+    return index is int ? path.substring(index + 1) : path;
 }

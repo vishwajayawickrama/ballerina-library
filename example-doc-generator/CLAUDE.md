@@ -56,12 +56,14 @@ Required runtime values:
 bal run -- mysql
 bal run -- zoom.meetings "Use BearerTokenConfig for authentication."
 bal run -- snowflake with-pr
+bal run -- only-pr
 bal run -- trigger trigger.github
 bal run -- trigger trigger.github "Use IssuesService and the onOpened handler."
 bal run -- prompt artifacts/execution-prompt/<prompt-file>.md
 bal run -- batch config=batch_items.json
 bal run -- batch config=batch_items.json timeout=7200
 bal run -- batch config=batch_items.json with-pr
+bal run -- only-batch-pr
 bal run -- crop-screenshots
 ```
 
@@ -70,7 +72,7 @@ unless the user explicitly asks for a planning-only mode.
 
 ## Publishing
 
-Publishing is opt-in through `with-pr`.
+Publishing is explicit through `with-pr`, `only-pr`, or `only-batch-pr`.
 
 For connector runs, `with-pr` must:
 
@@ -83,6 +85,8 @@ For connector runs, `with-pr` must:
 
 For batch runs, `with-pr` publishes successful connector items into shared batch
 branches and creates the docs and samples PRs after all items finish.
+`only-batch-pr` publishes successful connector archives from `artifacts_archive/`
+into those same batch branches without rerunning generation.
 
 Trigger publishing is not implemented. Keep trigger runs artifact-only unless
 that support is added deliberately.
