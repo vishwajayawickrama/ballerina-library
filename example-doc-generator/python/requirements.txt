@@ -1,3 +1,2 @@
-Pillow>=12.1.1
 playwright>=1.40
 python-dotenv>=1.0

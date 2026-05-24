@@ -39,13 +39,13 @@ tasks.jar {
     exclude "META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA"
 }
 
-tasks.register("copyAgentBridgeJar", Copy) {
+tasks.register("copyNativeBridgeJar", Copy) {
     dependsOn tasks.jar
     from tasks.jar
-    into layout.projectDirectory.dir("../../target/agent-bridge")
-    rename { "agent-bridge.jar" }
+    into layout.projectDirectory.dir("../../target/native-bridge")
+    rename { "native-bridge.jar" }
 }
 
 tasks.build {
-    dependsOn tasks.copyAgentBridgeJar
+    dependsOn tasks.copyNativeBridgeJar
 }

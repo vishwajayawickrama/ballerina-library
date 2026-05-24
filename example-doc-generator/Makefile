@@ -1,4 +1,4 @@
-.PHONY: help setup setup-python setup-bal build build-agent-bridge run run-trigger run-prompt \
+.PHONY: help setup setup-python setup-bal build build-native-bridge build-agent-bridge run run-trigger run-prompt \
         crop-screenshots crop-screenshots-dry crop-screenshots-backup \
         publish-docs publish-docs-dry publish-docs-no-preview publish-docs-no-pr \
         pr-preview pr-preview-no-preview pr-preview-no-pr pr-preview-dry \
@@ -21,8 +21,8 @@ help:
 	@echo "    make setup            Install all dependencies (Ballerina + Python)"
 	@echo "    make setup-python     Create python/.venv and install Python deps"
 	@echo "    make setup-bal        Build the Ballerina project"
-	@echo "    make build-agent-bridge"
-	@echo "                          Compile the Java interop bridge for Claude agent execution"
+	@echo "    make build-native-bridge"
+	@echo "                          Compile the Java native interop bridge"
 	@echo ""
 	@echo "  Run"
 	@echo "    make run CONNECTOR=mysql                                      Run the full pipeline for a connector"
@@ -129,12 +129,14 @@ setup-python: python/.venv/.installed
 
 setup-bal:
 	@echo "→ Building Ballerina project..."
-	$(MAKE) build-agent-bridge
+	$(MAKE) build-native-bridge
 	bal build
 	@echo "Ballerina build complete."
 
-build-agent-bridge:
-	gradle -p java/agent-bridge copyAgentBridgeJar
+build-native-bridge:
+	gradle -p java/native-bridge copyNativeBridgeJar
+
+build-agent-bridge: build-native-bridge
 
 build: setup-bal
 
@@ -142,29 +144,29 @@ build: setup-bal
 
 ADDITIONAL_INSTRUCTIONS ?=
 
-run: build-agent-bridge
+run: build-native-bridge
 	@[ "$(CONNECTOR)" ] || { echo "Usage: make run CONNECTOR=mysql"; exit 1; }
 	@echo "→ Running full pipeline for connector: $(CONNECTOR)$(if $(ADDITIONAL_INSTRUCTIONS), (with additional instructions),)"
 	bal run -- "$(CONNECTOR)" $(if $(ADDITIONAL_INSTRUCTIONS),"$(ADDITIONAL_INSTRUCTIONS)",)
 
-run-trigger: build-agent-bridge
+run-trigger: build-native-bridge
 	@[ "$(TRIGGER)" ] || { echo "Usage: make run-trigger TRIGGER=trigger.github"; exit 1; }
 	@echo "→ Running full pipeline for trigger: $(TRIGGER)$(if $(ADDITIONAL_INSTRUCTIONS), (with additional instructions),)"
 	bal run -- trigger "$(TRIGGER)" $(if $(ADDITIONAL_INSTRUCTIONS),"$(ADDITIONAL_INSTRUCTIONS)",)
 
-run-prompt: build-agent-bridge
+run-prompt: build-native-bridge
 	@[ "$(PROMPT)" ] || { echo "Usage: make run-prompt PROMPT=artifacts/execution-prompt/<file>.md"; exit 1; }
 	@echo "→ Running pipeline from existing execution prompt: $(PROMPT)"
 	bal run -- prompt "$(PROMPT)"
 
-crop-screenshots: python/.venv/.installed
-	python/.venv/bin/python python/crop_screenshots.py
+crop-screenshots: build-native-bridge
+	bal run -- crop-screenshots
 
-crop-screenshots-dry: python/.venv/.installed
-	python/.venv/bin/python python/crop_screenshots.py --dry-run
+crop-screenshots-dry: build-native-bridge
+	bal run -- crop-screenshots dry-run
 
-crop-screenshots-backup: python/.venv/.installed
-	python/.venv/bin/python python/crop_screenshots.py --backup
+crop-screenshots-backup: build-native-bridge
+	bal run -- crop-screenshots backup
 
 # ── Publish docs ─────────────────────────────────────────────────────────────
 # Defaults are read from .env by publish_docs.py.

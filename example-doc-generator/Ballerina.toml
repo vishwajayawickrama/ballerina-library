@@ -8,5 +8,5 @@ distribution = "2201.13.1"
 observabilityIncluded = true
 
 [[platform.java21.dependency]]
-path = "target/agent-bridge/agent-bridge.jar"
-modules = ["claude_agent_sdk"]
+path = "target/native-bridge/native-bridge.jar"
+modules = ["claude_agent_sdk", "image_processor"]

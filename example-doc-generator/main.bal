@@ -40,6 +40,14 @@ import wso2/example_doc_generator.utils;
 # + arg4                   - third batch option
 # + return                 - an error if any step fails
 public function main(string modeOrConnectorName, string arg2 = "", string arg3 = "", string arg4 = "") returns error? {
+    if modeOrConnectorName == "crop-screenshots" {
+        check utils:cropScreenshots({
+            dryRun: arg2 == "dry-run" || arg3 == "dry-run" || arg4 == "dry-run",
+            backup: arg2 == "backup" || arg3 == "backup" || arg4 == "backup"
+        });
+        return;
+    }
+
     if modeOrConnectorName == "batch" {
         check batch_runner:runBatch(arg2, arg3, arg4);
         return;
@@ -306,21 +314,11 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     utils:log("");
 
     utils:log("[STEP 15] Cropping screenshots...");
-    os:Process|error cropProc = os:exec({
-        value: "python/.venv/bin/python",
-        arguments: ["python/crop_screenshots.py"]
-    });
-    if cropProc is error {
-        utils:log("\t[WARN] Could not launch crop_screenshots.py: " + cropProc.message());
-        utils:log("\t[WARN] Run `make crop-screenshots` manually to crop screenshots.");
+    error? cropErr = utils:cropScreenshots();
+    if cropErr is error {
+        utils:log("\t[WARN] Could not crop screenshots: " + cropErr.message());
     } else {
-        int exitCode = check cropProc.waitForExit();
-        if exitCode == 0 {
-            utils:log("\t[INFO] Screenshots cropped successfully.");
-        } else {
-            utils:log("\t[WARN] crop_screenshots.py exited with code " + exitCode.toString() + ".");
-            utils:log("\t[WARN] Run `make crop-screenshots` manually to crop screenshots.");
-        }
+        utils:log("\t[INFO] Screenshots cropped successfully.");
     }
     utils:log("");
 

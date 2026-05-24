@@ -1,0 +1,10 @@
+# Gradle
+.gradle/
+build/
+
+# Java IDE output
+bin/
+out/
+
+# Generated archives
+*.jar

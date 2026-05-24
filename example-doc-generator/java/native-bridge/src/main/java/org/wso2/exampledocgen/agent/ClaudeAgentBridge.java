@@ -69,7 +69,7 @@ public final class ClaudeAgentBridge {
                     .build();
             Iterable<Message> messages = client.connectAndReceive(prompt.getValue());
             return new AgentSession(client, messages.iterator());
-        } catch (Exception e) {
+        } catch (JsonProcessingException | IllegalArgumentException | IllegalStateException e) {
             return new FailedSession(e);
         }
     }
@@ -95,7 +95,7 @@ public final class ClaudeAgentBridge {
             }
             session.pendingEvents().addAll(events);
             return toJson(session.pendingEvents().remove());
-        } catch (Exception e) {
+        } catch (IllegalArgumentException | IllegalStateException e) {
             return errorEvent(e);
         }
     }
@@ -126,41 +126,43 @@ public final class ClaudeAgentBridge {
 
     private static List<Map<String, Object>> normalizeMessage(Message message) {
         List<Map<String, Object>> events = new ArrayList<>();
-        if (message instanceof SystemMessage systemMessage) {
-            Object sessionId = systemMessage.data() == null ? null : systemMessage.data().get("session_id");
-            Map<String, Object> event = new LinkedHashMap<>();
-            event.put("type", "init".equals(systemMessage.subtype()) ? "session" : "system");
-            event.put("subtype", systemMessage.subtype() == null ? "unknown" : systemMessage.subtype());
-            if (sessionId != null) {
-                event.put("sessionId", sessionId.toString());
+        switch (message) {
+            case SystemMessage systemMessage -> {
+                Object sessionId = systemMessage.data() == null ? null : systemMessage.data().get("session_id");
+                Map<String, Object> event = new LinkedHashMap<>();
+                event.put("type", "init".equals(systemMessage.subtype()) ? "session" : "system");
+                event.put("subtype", systemMessage.subtype() == null ? "unknown" : systemMessage.subtype());
+                if (sessionId != null) {
+                    event.put("sessionId", sessionId.toString());
+                }
+                events.add(event);
             }
-            events.add(event);
-            return events;
-        }
-
-        if (message instanceof AssistantMessage assistantMessage) {
-            for (ContentBlock block : assistantMessage.content()) {
-                if (block instanceof TextBlock textBlock) {
-                    events.add(Map.of("type", "assistant_text", "text", textBlock.text()));
-                } else if (block instanceof ToolUseBlock toolUseBlock) {
-                    Map<String, Object> event = new LinkedHashMap<>();
-                    event.put("type", "tool_use");
-                    event.put("name", toolUseBlock.name());
-                    event.put("input", jsonOrString(toolUseBlock.input()));
-                    events.add(event);
-                } else {
-                    events.add(Map.of("type", "tool_use", "name", block.getClass().getSimpleName(), "input", ""));
+            case AssistantMessage assistantMessage -> {
+                for (ContentBlock block : assistantMessage.content()) {
+                    switch (block) {
+                        case TextBlock textBlock ->
+                                events.add(Map.of("type", "assistant_text", "text", textBlock.text()));
+                        case ToolUseBlock toolUseBlock -> {
+                            Map<String, Object> event = new LinkedHashMap<>();
+                            event.put("type", "tool_use");
+                            event.put("name", toolUseBlock.name());
+                            event.put("input", jsonOrString(toolUseBlock.input()));
+                            events.add(event);
+                        }
+                        default -> events.add(Map.of("type", "tool_use", "name", block.getClass().getSimpleName(),
+                                "input", ""));
+                    }
                 }
             }
-            return events;
-        }
-
-        if (message instanceof ResultMessage resultMessage) {
-            Map<String, Object> event = new LinkedHashMap<>();
-            event.put("type", "result");
-            event.put("text", resultMessage.result());
-            event.put("cost", cost(resultMessage));
-            events.add(event);
+            case ResultMessage resultMessage -> {
+                Map<String, Object> event = new LinkedHashMap<>();
+                event.put("type", "result");
+                event.put("text", resultMessage.result());
+                event.put("cost", cost(resultMessage));
+                events.add(event);
+            }
+            default -> {
+            }
         }
         return events;
     }
