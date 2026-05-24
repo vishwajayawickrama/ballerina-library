@@ -6,12 +6,13 @@ It can run one connector, run one trigger, or process a mixed batch queue.
 The pipeline is:
 
 ```text
-CLI input -> Claude prompt generation -> Claude Agent + Playwright MCP -> Markdown guide + screenshots
+CLI input -> Ballerina orchestration -> Claude Agent + Playwright MCP -> Markdown guide + screenshots
 ```
 
 The Ballerina app orchestrates the pipeline. Agent execution runs in-process
 through a small Java interop bridge over the Claude Agent SDK for Java and
-Playwright MCP.
+Playwright MCP. Screenshot processing and publishing are also implemented in
+Ballerina.
 
 ## Prerequisites
 
@@ -84,6 +85,12 @@ bal run -- snowflake with-pr
 Without `with-pr`, the pipeline only writes local artifacts and does not modify
 `docs-integrator` or `integration-samples`.
 
+To replay a saved connector prompt:
+
+```bash
+bal run -- prompt artifacts/execution-prompt/<prompt-file>.md
+```
+
 ## Run One Trigger
 
 Use `trigger` as the first argument. The pipeline derives the Ballerina Central
@@ -100,6 +107,13 @@ bal run -- trigger trigger.github "Use IssuesService and the onOpened handler."
 ```
 
 Do not pass `--trigger` or `TRIGGER_PACKAGE`.
+
+To replay a saved trigger prompt, use the same prompt mode. Trigger prompts are
+detected from the prompt filename:
+
+```bash
+bal run -- prompt artifacts/execution-prompt/<trigger-prompt-file>.md
+```
 
 ## Batch Runs
 
@@ -206,71 +220,7 @@ The publisher uses these `Config.toml` values:
 
 Trigger publishing is not automated yet.
 
-## Run In GitHub Actions
-
-Use the `Connector Documentation Automation` workflow from the Actions tab.
-The workflow file is:
-
-```text
-.github/workflows/connector-example-doc-generation.yml
-```
-
-Required repository/environment secrets:
-
-| Secret | Required for | Description |
-|--------|--------------|-------------|
-| `LLM_API_KEY` | generation | Anthropic API key used by Ballerina and Claude Code |
-| `DOCS_INTEGRATOR_TOKEN` | connector publishing only | Token with permission to push to the docs-integrator fork and create PRs |
-| `INTEGRATION_SAMPLES_TOKEN` | connector publishing only | Token with permission to push to the integration-samples fork and create PRs |
-
-Workflow inputs:
-
-| Input | Value |
-|-------|-------|
-| `mode` | `connector` or `trigger` |
-| `name` | connector name like `mysql`, or trigger name like `trigger.twilio` |
-| `instructions` | optional extra guidance |
-| `publishConnector` | set to `true` only for connector runs that should publish docs |
-| `docsIntegratorFork` | required when `publishConnector` is `true` |
-| `docsIntegratorUpstream` | defaults to `wso2/docs-integrator` |
-| `docsIntegratorBaseBranch` | defaults to `main` |
-| `integrationSamplesFork` | required when `publishConnector` is `true` |
-| `integrationSamplesUpstream` | defaults to `wso2/integration-samples` |
-| `integrationSamplesBaseBranch` | defaults to `main` |
-
-Examples:
-
-```text
-mode: connector
-name: mysql
-instructions:
-publishConnector: false
-```
-
-```text
-mode: trigger
-name: trigger.twilio
-instructions: Use the onReceived handler.
-publishConnector: false
-```
-
-```text
-mode: connector
-name: zoom.meetings
-instructions: Use BearerTokenConfig for authentication.
-publishConnector: true
-docsIntegratorFork: your-org/docs-integrator
-integrationSamplesFork: your-org/integration-samples
-```
-
-After the workflow completes, open the workflow run summary and download the
-artifact named `example-doc-generator-<mode>-<name>`. It contains the generated
-Markdown guide, screenshots, run logs, and a README describing the output.
-
-GitHub Actions intentionally does not support batch mode. Run batch queues
-locally with `bal run -- batch config=batch_items.json`.
-
-## Java Agent Bridge
+## Java Native Bridge
 
 The pipeline calls the Claude agent through Ballerina Java interop. Build the
 bridge before `bal build`:
@@ -279,9 +229,10 @@ bridge before `bal build`:
 gradle -p java/native-bridge copyNativeBridgeJar
 ```
 
-The bridge expects `org.springaicommunity:claude-code-sdk:1.0.0-SNAPSHOT` in the
-local Maven cache. If it is missing, build/install
-`spring-ai-community/claude-agent-sdk-java` first.
+The bridge also provides image processing through Java ImageIO. It expects
+`org.springaicommunity:claude-code-sdk:1.0.0-SNAPSHOT` in the local Maven cache.
+If it is missing, build/install `spring-ai-community/claude-agent-sdk-java`
+first.
 
 If VS Code still reports that `ClaudeAgentBridge.java` is not on the classpath,
 run `Java: Clean Java Language Server Workspace` from the command palette and
