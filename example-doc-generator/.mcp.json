@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "playwright": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest", "--headless", "--viewport-size=1720,968"]
+      "command": "/opt/homebrew/bin/playwright-mcp",
+      "args": ["--headless", "--viewport-size=1720,968"]
     }
   }
 }

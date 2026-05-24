@@ -9,8 +9,9 @@ The pipeline is:
 CLI input -> Claude prompt generation -> Claude Agent + Playwright MCP -> Markdown guide + screenshots
 ```
 
-The Ballerina app orchestrates the pipeline. The Python agent server runs the
-Claude Agent SDK and Playwright MCP against code-server.
+The Ballerina app orchestrates the pipeline. Agent execution runs in-process
+through a small Java interop bridge over the Claude Agent SDK for Java and
+Playwright MCP.
 
 ## Prerequisites
 
@@ -19,11 +20,12 @@ Install these first:
 | Tool | Required |
 |------|----------|
 | Ballerina | `2201.13.x` |
+| Java | `21` |
 | Python | `3.11+` |
 | uv | latest |
 | Node.js | LTS+ |
 | Claude Code CLI | latest |
-| Anthropic API key | for Ballerina API calls and the Python agent server |
+| Anthropic API key | for Ballerina API calls and Claude agent execution |
 
 `code-server` is installed by the pipeline if it is missing.
 
@@ -47,13 +49,13 @@ cp .env.example .env
 
 At minimum, set `DOCS_INTEGRATOR_FORK` if you plan to publish connector output.
 
-3. Export the Anthropic key for the Python agent server:
+3. Export the Anthropic key for Claude agent execution:
 
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
-4. Install Python dependencies and build the Ballerina app:
+4. Install Python helper dependencies and build the Ballerina app:
 
 ```bash
 cd python
@@ -61,6 +63,7 @@ uv venv
 uv pip install -r requirements.txt
 .venv/bin/playwright install chromium
 cd ..
+make build-agent-bridge
 bal build
 ```
 
@@ -174,8 +177,8 @@ Batch runs move each item's `artifacts/` directory to `artifacts_archive/<slug>`
 or `artifacts_archive/<slug>_FAILED`. If a run produces no artifacts, the batch
 runner creates a `<slug>_NO_ARTIFACTS/README.txt` placeholder.
 
-At the end of a single pipeline run, the Python agent server is stopped
-automatically.
+At the end of a single pipeline run, the in-process Java agent bridge is shut
+down automatically.
 
 ## Publishing Connector Output
 
@@ -260,31 +263,18 @@ Markdown guide, screenshots, run logs, and a README describing the output.
 GitHub Actions intentionally does not support batch mode. Run batch queues
 locally with `bal run -- batch config=batch_items.json`.
 
-## Agent Server
+## Java Agent Bridge
 
-The pipeline starts and stops the agent server automatically. For debugging:
-
-```bash
-cd python
-unset CLAUDECODE
-.venv/bin/python agent_server.py --port 8765
-```
-
-In another terminal:
+The pipeline calls the Claude agent through Ballerina Java interop. Build the
+bridge before `bal build` or use the Make targets, which do this automatically:
 
 ```bash
-curl http://localhost:8765/health
-curl -s -X POST http://localhost:8765/shutdown
+make build-agent-bridge
 ```
 
-The server API is:
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/run` | Submit `{ "prompt_path": "..." }` |
-| `GET` | `/jobs/<id>` | Poll logs, status, and cost |
-| `GET` | `/health` | Health check |
-| `POST` | `/shutdown` | Stop the server |
+The bridge expects `org.springaicommunity:claude-code-sdk:1.0.0-SNAPSHOT` in the
+local Maven cache. If it is missing, build/install
+`spring-ai-community/claude-agent-sdk-java` first.
 
 ## Optional Make Commands
 
@@ -313,7 +303,7 @@ make clean-artifacts
 | API key validation failed | Set `llmApiKey` in `Config.toml` and export `ANTHROPIC_API_KEY` |
 | `claude` not found | Install Claude Code CLI and verify with `claude --version` |
 | Batch fails because `artifacts/` exists | Move or delete `artifacts/` after reviewing it |
-| Agent server not ready | Start `python/agent_server.py` manually and inspect the Python error |
+| Java agent bridge build fails | Build/install `spring-ai-community/claude-agent-sdk-java` and rerun `make build-agent-bridge` |
 | `uv` not found | Install uv from `https://docs.astral.sh/uv/` |
 | Python dependency error | Run `uv pip install -r python/requirements.txt` inside the venv |
 | Ballerina build error | Run `bal clean && bal build` |

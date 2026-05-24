@@ -13,11 +13,6 @@ llmApiKey = ""
 # Start manually with: code-server --auth none --bind-addr 0.0.0.0:8080
 codeServerPort = 8080
 
-# Python agent server port (python/agent_server.py listens on this port)
-# The pipeline will start the agent server automatically if not running.
-# Start manually with: make start-agent
-agentServerPort = 8765
-
 # Additional instructions for the agent (optional)
 # Use this to provide connector-specific guidance that the agent must follow,
 # e.g. which authentication type to use, which operation to call, or any
@@ -25,4 +20,3 @@ agentServerPort = 8765
 # Leave empty or omit to use defaults.
 # Example: additionalInstructions = "Use BearerTokenConfig for authentication. The token field maps to the Zoom API Bearer token."
 # additionalInstructions = ""
-

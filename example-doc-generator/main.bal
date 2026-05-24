@@ -28,14 +28,14 @@ import wso2/example_doc_generator.utils;
 
 # Entry point for the full automation pipeline.
 #
-# Phase 1  (Steps 1–2):  Pre-flight validation — API key and Claude Code CLI.
-# Phase 2  (Steps 3–6):  Infrastructure     — code-server, extension check, and Python agent server.
+# Phase 1  (Steps 1–2):  Pre-flight validation — API key and agent runtime.
+# Phase 2  (Steps 3–6):  Infrastructure     — code-server, extension check, and Java agent bridge.
 # Phase 3  (Steps 7–10): Prompt generation  — build, call Claude, format, save.
 # Phase 4  (Steps 11–12): Agent execution   — run agent, enforce doc structure.
-# Phase 5  (Steps 13–17): Post-processing   — inject Devant button, append examples link, crop screenshots, write run log, stop agent server.
+# Phase 5  (Steps 13–17): Post-processing   — inject Devant button, append examples link, crop screenshots, write run log, stop agent bridge.
 #
-# + modeOrConnectorName    - connector name by default, "trigger" to run the trigger workflow, or "batch" to run a queue
-# + arg2                   - connector instructions, trigger name, or first batch option
+# + modeOrConnectorName    - connector name by default, "trigger" to run the trigger workflow, "prompt" to reuse an execution prompt, or "batch" to run a queue
+# + arg2                   - connector instructions, trigger name, execution prompt path, or first batch option
 # + arg3                   - trigger instructions or second batch option
 # + arg4                   - third batch option
 # + return                 - an error if any step fails
@@ -45,15 +45,25 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
         return;
     }
 
-    boolean triggerMode = modeOrConnectorName == "trigger";
-    string workflowKind = triggerMode ? "trigger" : "connector";
-    string targetName = triggerMode ? arg2.trim() : modeOrConnectorName.trim();
+    boolean promptReplayMode = modeOrConnectorName == "prompt";
+    string replayPromptPath = promptReplayMode ? arg2.trim() : "";
+    if promptReplayMode && replayPromptPath == "" {
+        return error("Execution prompt path is required. Usage: bal run -- prompt <executionPromptPath>");
+    }
+
+    boolean replayTriggerMode = promptReplayMode && isTriggerPromptPath(replayPromptPath);
+    boolean triggerMode = modeOrConnectorName == "trigger" || replayTriggerMode;
+    string workflowKind = promptReplayMode ? (triggerMode ? "trigger-prompt" : "connector-prompt") :
+        (triggerMode ? "trigger" : "connector");
+    string targetName = promptReplayMode ? inferTargetNameFromPromptPath(replayPromptPath, triggerMode) :
+        (triggerMode ? arg2.trim() : modeOrConnectorName.trim());
     if targetName == "" {
-        return error(triggerMode ? "Trigger name is required. Usage: bal run -- trigger <triggerName> [additionalInstructions]" :
+        return error(promptReplayMode ? "Could not infer target name from execution prompt path." :
+            triggerMode ? "Trigger name is required. Usage: bal run -- trigger <triggerName> [additionalInstructions]" :
             "Connector name is required. Usage: bal run -- <connectorName> [additionalInstructions]");
     }
     string triggerPackage = triggerMode ? "ballerinax/" + targetName : "";
-    string additionalInstructions = triggerMode ? arg3 : arg2;
+    string additionalInstructions = promptReplayMode ? "" : (triggerMode ? arg3 : arg2);
 
     utils:log("=== WSO2 Integrator Documentation Pipeline ===");
     utils:log("");
@@ -68,6 +78,9 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     if additionalInstructions != "" {
         utils:log("[INFO] Additional instructions: " + additionalInstructions);
     }
+    if promptReplayMode {
+        utils:log("[INFO] Execution prompt: " + replayPromptPath);
+    }
     utils:log("");
 
     // Track LLM usage across all direct API calls (agent cost is tracked separately)
@@ -80,13 +93,8 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     check ai_client:validateApiKey(llmApiKey);
     utils:log("");
 
-    utils:log("[STEP 2] Checking if Claude Code CLI is installed...");
-    boolean claudeInstalled = utils:checkClaudeCodeInstalled();
-    if !claudeInstalled {
-        return error("Claude Code CLI ('claude') is not installed or not on PATH. " +
-                     "Install it from https://claude.ai/code and re-run the pipeline.");
-    }
-    utils:log("\t[INFO] Claude Code CLI is installed.");
+    utils:log("[STEP 2] Skipping Claude Code CLI pre-flight check...");
+    utils:log("\t[INFO] Java agent bridge will resolve the Claude runtime during agent execution.");
     utils:log("");
 
     // ── Phase 2: Infrastructure ─────────────────────────────────────────────
@@ -126,19 +134,9 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     }
     utils:log("");
 
-    utils:log("[STEP 6] Checking Python agent server on port " + agentServerPort.toString() + "...");
-    boolean agentRunning = utils:checkAgentServerRunning(agentServerPort);
-    boolean agentStartedByThisProcess = false;
-    if !agentRunning {
-        utils:log("\t[INFO] Agent server not running. Starting via `uv run agent_server.py`...");
-        check utils:startAgentServer(agentServerPort);
-        agentStartedByThisProcess = true;
-        utils:log("\t[INFO] Agent server started.");
-    } else {
-        utils:log("\t[INFO] Agent server is already running.");
-    }
-    string agentUrl = "http://localhost:" + agentServerPort.toString();
-    utils:log("\t[INFO] Agent server URL: " + agentUrl);
+    utils:log("[STEP 6] Initializing Java agent bridge...");
+    check agent_client:initAgentBridge();
+    utils:log("\t[INFO] Java agent bridge initialized.");
     utils:log("");
 
     // ── Phase 3: Prompt generation ──────────────────────────────────────────
@@ -171,25 +169,41 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
 
     agent_client:AgentCost? agentCost = ();
     string enforcedDocPath = "";
+    string promptPath = replayPromptPath;
+    int promptLength = 0;
     error? pipelineErr = ();
     do {
-    utils:log("[STEP 7] Building system and user prompts...");
-    string|error cwdResult = file:getCurrentDir();
-    string projectRoot = cwdResult is string ? cwdResult : os:getEnv("PWD");
-    string systemPrompt = triggerMode ?
-        prompts:buildTriggerSystemPrompt(projectRoot, targetName, triggerPackage, imgSlug, sampleName) :
-        prompts:buildSystemPrompt(projectRoot, targetName, imgSlug);
-    string userMessage = triggerMode ?
-        prompts:buildTriggerUserMessage(targetName, triggerPackage, codeServerUrl, projectRoot, additionalInstructions) :
-        prompts:buildConnectorUserMessage(targetName, codeServerUrl, projectRoot, additionalInstructions);
+    if promptReplayMode {
+        utils:log("[STEP 7] Reusing existing execution prompt...");
+        string|io:Error existingPrompt = io:fileReadString(promptPath);
+        if existingPrompt is io:Error {
+            check error("Could not read execution prompt: " + existingPrompt.message());
+        } else {
+            promptLength = existingPrompt.length();
+        }
+        utils:log("\t[INFO] Using: " + promptPath);
+        utils:log("[STEP 8] Skipping Anthropic API prompt generation.");
+        utils:log("[STEP 9] Skipping execution prompt formatting.");
+        utils:log("[STEP 10] Skipping execution prompt save.");
+        utils:log("");
+    } else {
+        utils:log("[STEP 7] Building system and user prompts...");
+        string|error cwdResult = file:getCurrentDir();
+        string projectRoot = cwdResult is string ? cwdResult : os:getEnv("PWD");
+        string systemPrompt = triggerMode ?
+            prompts:buildTriggerSystemPrompt(projectRoot, targetName, triggerPackage, imgSlug, sampleName) :
+            prompts:buildSystemPrompt(projectRoot, targetName, imgSlug);
+        string userMessage = triggerMode ?
+            prompts:buildTriggerUserMessage(targetName, triggerPackage, codeServerUrl, projectRoot, additionalInstructions) :
+            prompts:buildConnectorUserMessage(targetName, codeServerUrl, projectRoot, additionalInstructions);
 
-    utils:log("[STEP 8] Calling Anthropic API to generate execution prompt...");
-    ai_client:LlmResult promptResult = check ai_client:callClaude(systemPrompt, userMessage, llmApiKey);
-    string executionPrompt = promptResult.text;
-    promptGenUsage = promptResult.usage;
+        utils:log("[STEP 8] Calling Anthropic API to generate execution prompt...");
+        ai_client:LlmResult promptResult = check ai_client:callClaude(systemPrompt, userMessage, llmApiKey);
+        string executionPrompt = promptResult.text;
+        promptGenUsage = promptResult.usage;
 
-    utils:log("[STEP 9] Formatting execution prompt...");
-    string header = string `# Execution Prompt
+        utils:log("[STEP 9] Formatting execution prompt...");
+        string header = string `# Execution Prompt
 
 <!-- ============================================================
      XML-TAGGED MARKDOWN EXECUTION PROMPT
@@ -200,17 +214,19 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
      ============================================================ -->
 
 `;
-    string fullPrompt = header + executionPrompt;
+        string fullPrompt = header + executionPrompt;
+        promptLength = fullPrompt.length();
 
-    utils:log("[STEP 10] Saving execution prompt to " + utils:OUTPUT_DIR + "...");
-    string promptPath = check utils:saveExecutionPrompt(fullPrompt, goalSlug);
-    utils:log("\t[INFO] Saved to: " + promptPath);
-    utils:log("");
+        utils:log("[STEP 10] Saving execution prompt to " + utils:OUTPUT_DIR + "...");
+        promptPath = check utils:saveExecutionPrompt(fullPrompt, goalSlug);
+        utils:log("\t[INFO] Saved to: " + promptPath);
+        utils:log("");
+    }
 
     // ── Phase 4: Agent execution ─────────────────────────────────────────────
 
     utils:log("[STEP 11] Running Claude agent...");
-    agentCost = check agent_client:runClaudeAgent(promptPath, agentUrl);
+    agentCost = check agent_client:runClaudeAgent(promptPath);
     utils:log("");
 
     // ── Phase 5: Post-processing ──────────────────────────────────────────────
@@ -339,7 +355,7 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     utils:log(string `Start time:      ${time:utcToString(startTime)}`);
     utils:log(string `End time:        ${time:utcToString(endTime)}`);
     utils:log(string `Duration:        ${durationSecs}s`);
-    utils:log(string `Prompt length:   ${fullPrompt.length()} chars`);
+    utils:log(string `Prompt length:   ${promptLength} chars`);
     utils:log("--- LLM Cost Breakdown ---");
     utils:log(string `Prompt gen:      ${promptGenUsage.inputTokens} in / ${promptGenUsage.outputTokens} out  |  $${promptGenUsage.costUsd}`);
     utils:log(string `Doc enforcement: ${docEnfUsage.inputTokens} in / ${docEnfUsage.outputTokens} out  |  $${docEnfUsage.costUsd}`);
@@ -351,16 +367,12 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     }
 
     utils:log("");
-    if agentStartedByThisProcess {
-        utils:log("[STEP 17] Stopping Python agent server...");
-        error? stopErr = agent_client:stopAgentServer(agentUrl);
-        if stopErr is error {
-            utils:log("\t[WARN] Could not stop Python agent server: " + stopErr.message());
-        } else {
-            utils:log("\t[INFO] Python agent server stopped.");
-        }
+    utils:log("[STEP 17] Stopping Java agent bridge...");
+    error? stopErr = agent_client:stopAgentBridge();
+    if stopErr is error {
+        utils:log("\t[WARN] Could not stop Java agent bridge: " + stopErr.message());
     } else {
-        utils:log("[STEP 17] Python agent server was already running; leaving it active.");
+        utils:log("\t[INFO] Java agent bridge stopped.");
     }
 
     if pipelineErr is error {
@@ -370,4 +382,19 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     utils:log("");
     utils:log("=== Pipeline Complete ===");
     utils:log("Artifacts saved under '" + utils:OUTPUT_DIR + "'.");
+}
+
+function isTriggerPromptPath(string promptPath) returns boolean {
+    string baseName = re `^.*/`.replaceAll(promptPath, "");
+    return baseName.includes("-trigger-example_execution_prompt");
+}
+
+function inferTargetNameFromPromptPath(string promptPath, boolean triggerMode) returns string {
+    string baseName = re `^.*/`.replaceAll(promptPath, "");
+    string promptSlug = re `_execution_prompt.*$`.replaceAll(baseName, "");
+    if triggerMode {
+        string triggerSlug = re `-trigger-example$`.replaceAll(promptSlug, "");
+        return re `_`.replaceAll(triggerSlug, ".");
+    }
+    return re `-connector-example$`.replaceAll(promptSlug, "");
 }

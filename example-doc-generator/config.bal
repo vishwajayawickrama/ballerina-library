@@ -22,4 +22,7 @@ configurable string llmApiKey = ?;
 
 // === Service Ports ===
 configurable int codeServerPort = 8080;
+
+// Deprecated and ignored. Kept temporarily so existing Config.toml files that
+// still define this value do not break local runs.
 configurable int agentServerPort = 8765;

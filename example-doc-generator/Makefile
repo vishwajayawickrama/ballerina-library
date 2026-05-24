@@ -1,5 +1,4 @@
-.PHONY: help setup setup-python setup-bal build run run-trigger \
-        start-agent stop-agent \
+.PHONY: help setup setup-python setup-bal build build-agent-bridge run run-trigger run-prompt \
         crop-screenshots crop-screenshots-dry crop-screenshots-backup \
         publish-docs publish-docs-dry publish-docs-no-preview publish-docs-no-pr \
         pr-preview pr-preview-no-preview pr-preview-no-pr pr-preview-dry \
@@ -22,6 +21,8 @@ help:
 	@echo "    make setup            Install all dependencies (Ballerina + Python)"
 	@echo "    make setup-python     Create python/.venv and install Python deps"
 	@echo "    make setup-bal        Build the Ballerina project"
+	@echo "    make build-agent-bridge"
+	@echo "                          Compile the Java interop bridge for Claude agent execution"
 	@echo ""
 	@echo "  Run"
 	@echo "    make run CONNECTOR=mysql                                      Run the full pipeline for a connector"
@@ -30,8 +31,8 @@ help:
 	@echo "                                                                Run the full pipeline for a trigger"
 	@echo "    make run-trigger TRIGGER=trigger.github ADDITIONAL_INSTRUCTIONS='...'"
 	@echo "                                                                Run a trigger with extra guidance"
-	@echo "    make start-agent      Start the Python agent server in the foreground"
-	@echo "    make stop-agent       Send shutdown request to the agent server"
+	@echo "    make run-prompt PROMPT=artifacts/execution-prompt/<file>.md"
+	@echo "                                                                Reuse an existing execution prompt"
 	@echo ""
 	@echo "  Publish"
 	@echo "    make publish-docs             Publish docs + create PR (auto-detects docs-integrator path)"
@@ -128,23 +129,40 @@ setup-python: python/.venv/.installed
 
 setup-bal:
 	@echo "→ Building Ballerina project..."
+	$(MAKE) build-agent-bridge
 	bal build
 	@echo "Ballerina build complete."
 
+AGENT_BRIDGE_SDK_JAR ?= $(HOME)/.m2/repository/org/springaicommunity/claude-code-sdk/1.0.0-SNAPSHOT/claude-code-sdk-1.0.0-SNAPSHOT.jar
+BALLERINA_RT_JAR ?= /Library/Ballerina/distributions/ballerina-2201.13.4/bre/lib/ballerina-rt-2201.13.4.jar
+AGENT_BRIDGE_CP = $(BALLERINA_RT_JAR):$(AGENT_BRIDGE_SDK_JAR):$(shell test -d $(HOME)/.m2/repository && find $(HOME)/.m2/repository/org/zeroturnaround $(HOME)/.m2/repository/com/fasterxml $(HOME)/.m2/repository/io/projectreactor $(HOME)/.m2/repository/org/reactivestreams $(HOME)/.m2/repository/org/slf4j $(HOME)/.m2/repository/io/modelcontextprotocol $(HOME)/.m2/repository/com/networknt $(HOME)/.m2/repository/com/ethlo $(HOME)/.m2/repository/org/yaml -name '*.jar' 2>/dev/null | tr '\n' ':' )
+
+build-agent-bridge:
+	@[ -f "$(AGENT_BRIDGE_SDK_JAR)" ] || { echo "Missing $(AGENT_BRIDGE_SDK_JAR). Build/install spring-ai-community/claude-agent-sdk-java first."; exit 1; }
+	mkdir -p target/agent-bridge/classes
+	javac --release 21 -cp "$(AGENT_BRIDGE_CP)" -d target/agent-bridge/classes java/agent-bridge/src/main/java/org/wso2/exampledocgen/agent/ClaudeAgentBridge.java
+	jar --create --file target/agent-bridge/agent-bridge.jar -C target/agent-bridge/classes .
+
+build: setup-bal
+
 # ── Run ──────────────────────────────────────────────────────────────────────
 
-AGENT_SERVER_PORT ?= 8765
 ADDITIONAL_INSTRUCTIONS ?=
 
-run:
+run: build-agent-bridge
 	@[ "$(CONNECTOR)" ] || { echo "Usage: make run CONNECTOR=mysql"; exit 1; }
 	@echo "→ Running full pipeline for connector: $(CONNECTOR)$(if $(ADDITIONAL_INSTRUCTIONS), (with additional instructions),)"
 	bal run -- "$(CONNECTOR)" $(if $(ADDITIONAL_INSTRUCTIONS),"$(ADDITIONAL_INSTRUCTIONS)",)
 
-run-trigger:
+run-trigger: build-agent-bridge
 	@[ "$(TRIGGER)" ] || { echo "Usage: make run-trigger TRIGGER=trigger.github"; exit 1; }
 	@echo "→ Running full pipeline for trigger: $(TRIGGER)$(if $(ADDITIONAL_INSTRUCTIONS), (with additional instructions),)"
 	bal run -- trigger "$(TRIGGER)" $(if $(ADDITIONAL_INSTRUCTIONS),"$(ADDITIONAL_INSTRUCTIONS)",)
+
+run-prompt: build-agent-bridge
+	@[ "$(PROMPT)" ] || { echo "Usage: make run-prompt PROMPT=artifacts/execution-prompt/<file>.md"; exit 1; }
+	@echo "→ Running pipeline from existing execution prompt: $(PROMPT)"
+	bal run -- prompt "$(PROMPT)"
 
 crop-screenshots: python/.venv/.installed
 	python/.venv/bin/python python/crop_screenshots.py
@@ -154,14 +172,6 @@ crop-screenshots-dry: python/.venv/.installed
 
 crop-screenshots-backup: python/.venv/.installed
 	python/.venv/bin/python python/crop_screenshots.py --backup
-
-start-agent: python/.venv/.installed
-	@echo "→ Starting Python agent server (python/agent_server.py)..."
-	cd python && unset CLAUDECODE && .venv/bin/python agent_server.py --port $(AGENT_SERVER_PORT)
-
-stop-agent:
-	@echo "→ Sending shutdown to agent server..."
-	curl -s -X POST http://localhost:$(AGENT_SERVER_PORT)/shutdown || echo "Agent server not running."
 
 # ── Publish docs ─────────────────────────────────────────────────────────────
 # Defaults are read from .env by publish_docs.py.

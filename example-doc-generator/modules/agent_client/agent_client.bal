@@ -14,17 +14,11 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerina/http;
 import ballerina/lang.runtime;
+import ballerina/jballerina.java;
 import wso2/example_doc_generator.utils;
 
-# Job submission response from the agent server.
-type StartResponse record {
-    # UUID assigned to the submitted job
-    string job_id;
-};
-
-# Structured cost data returned by the agent server once the job completes.
+# Structured cost data returned by the agent bridge once the job completes.
 public type AgentCost record {
     # Total USD cost reported by the Claude Agent SDK (nil if not available)
     decimal? totalCostUsd;
@@ -40,9 +34,9 @@ public type AgentCost record {
     int? numTurns;
 };
 
-# Poll response for a running or completed agent job.
+# Poll response for a running or completed in-process agent job.
 type JobStatus record {
-    # "running" or "done"
+    # "queued", "running", "done", or "error"
     string status;
     # Accumulated log lines in "[LABEL] text" format
     string[] logs;
@@ -50,26 +44,23 @@ type JobStatus record {
     AgentCost? cost;
 };
 
-# Submits the execution prompt to the Python agent server and streams its log
+# Initializes the Java Claude agent bridge.
+#
+# + return - an error if the Java bridge could not be loaded
+public function initAgentBridge() returns error? {
+    string result = javaBridgeInit();
+    if result != "ok" {
+        return error("Java agent bridge returned unexpected init result: " + result);
+    }
+}
+
+# Submits the execution prompt to the Java agent bridge and streams its log
 # lines to the console as they arrive, blocking until the job is marked done.
 #
 # + promptPath - absolute or relative path to the generated execution prompt file
-# + agentUrl   - base URL of the Python agent server (e.g. http://localhost:8765)
 # + return     - AgentCost if available, nil if cost data was absent, or an error
-public function runClaudeAgent(string promptPath, string agentUrl) returns AgentCost?|error {
-    http:Client agentClient = check new (agentUrl, timeout = 600);
-
-    // Submit the job
-    json payload = {"prompt_path": promptPath};
-    http:Response startResp = check agentClient->post("/run", payload);
-    if startResp.statusCode < 200 || startResp.statusCode >= 300 {
-        string|error errBody = startResp.getTextPayload();
-        string detail = errBody is string ? errBody : "(unable to read body)";
-        return error(string `Agent server returned HTTP ${startResp.statusCode}: ${detail}`);
-    }
-    json startBody = check startResp.getJsonPayload();
-    StartResponse startData = check startBody.cloneWithType(StartResponse);
-    string jobId = startData.job_id;
+public function runClaudeAgent(string promptPath) returns AgentCost?|error {
+    string jobId = javaBridgeStartRun(promptPath);
     utils:log("\t[INFO] Job submitted: " + jobId);
 
     // Poll every second; print new log lines as they arrive
@@ -80,13 +71,8 @@ public function runClaudeAgent(string promptPath, string agentUrl) returns Agent
     while attempts < maxAttempts {
         runtime:sleep(1);
         attempts += 1;
-        http:Response pollResp = check agentClient->get(string `/jobs/${jobId}`);
-        if pollResp.statusCode < 200 || pollResp.statusCode >= 300 {
-            string|error errBody = pollResp.getTextPayload();
-            string detail = errBody is string ? errBody : "(unable to read body)";
-            return error(string `Agent poll failed HTTP ${pollResp.statusCode}: ${detail}`);
-        }
-        json pollBody = check pollResp.getJsonPayload();
+        string jobJson = javaBridgeGetJob(jobId);
+        json pollBody = check jobJson.fromJsonString();
         JobStatus jobStatus = check pollBody.cloneWithType(JobStatus);
 
         int i = lastLogCount;
@@ -107,18 +93,31 @@ public function runClaudeAgent(string promptPath, string agentUrl) returns Agent
     return error(string `Agent job ${jobId} did not complete within ${maxAttempts} seconds.`);
 }
 
-# Requests the Python agent server to shut down.
+# Requests the Java agent bridge to cancel active jobs and release executor resources.
 # This is a best-effort cleanup step; callers can log the returned error without
 # failing the completed pipeline.
 #
-# + agentUrl - base URL of the Python agent server (e.g. http://localhost:8765)
-# + return   - an error if the shutdown request could not be sent or was rejected
-public function stopAgentServer(string agentUrl) returns error? {
-    http:Client agentClient = check new (agentUrl, timeout = 10);
-    http:Response shutdownResp = check agentClient->post("/shutdown", {});
-    if shutdownResp.statusCode < 200 || shutdownResp.statusCode >= 300 {
-        string|error errBody = shutdownResp.getTextPayload();
-        string detail = errBody is string ? errBody : "(unable to read body)";
-        return error(string `Agent server shutdown returned HTTP ${shutdownResp.statusCode}: ${detail}`);
-    }
+# + return - an error if the shutdown request could not be completed
+public function stopAgentBridge() returns error? {
+    javaBridgeShutdown();
 }
+
+function javaBridgeInit() returns string = @java:Method {
+    'class: "org.wso2.exampledocgen.agent.ClaudeAgentBridge",
+    name: "init"
+} external;
+
+function javaBridgeStartRun(string promptPath) returns string = @java:Method {
+    'class: "org.wso2.exampledocgen.agent.ClaudeAgentBridge",
+    name: "startRun"
+} external;
+
+function javaBridgeGetJob(string jobId) returns string = @java:Method {
+    'class: "org.wso2.exampledocgen.agent.ClaudeAgentBridge",
+    name: "getJob"
+} external;
+
+function javaBridgeShutdown() = @java:Method {
+    'class: "org.wso2.exampledocgen.agent.ClaudeAgentBridge",
+    name: "shutdown"
+} external;

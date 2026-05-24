@@ -53,21 +53,6 @@ public function installCodeServer() returns error? {
     }
 }
 
-# Checks whether the Claude Code CLI ('claude') is available on PATH.
-# Runs `claude --version`; a zero exit code means it is installed.
-# + return - true if Claude Code CLI is installed, false otherwise
-public function checkClaudeCodeInstalled() returns boolean {
-    os:Process|error proc = os:exec({
-        value: "claude",
-        arguments: ["--version"]
-    });
-    if proc is error {
-        return false;
-    }
-    int|error exitCode = proc.waitForExit();
-    return exitCode is int && exitCode == 0;
-}
-
 # Checks whether code-server is reachable on the given port using curl.
 # + port - the port to check
 # + return - true if code-server is running, false otherwise
