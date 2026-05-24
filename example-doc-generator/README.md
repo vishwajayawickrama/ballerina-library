@@ -39,7 +39,7 @@ Run all commands from `example-doc-generator/`.
 cp Config.toml.example Config.toml
 ```
 
-Set `llmApiKey` in `Config.toml`. If you plan to publish connector output with
+Set `anthropicApiKey` in `Config.toml`. If you plan to publish connector output with
 `with-pr`, also set the docs-integrator and integration-samples fork values.
 
 2. Export the Anthropic key for Claude agent execution:
@@ -242,7 +242,7 @@ reload the window. The Java Gradle project lives under `native-bridge`.
 
 | Problem | Fix |
 |---------|-----|
-| API key validation failed | Set `llmApiKey` in `Config.toml` and export `ANTHROPIC_API_KEY` |
+| API key validation failed | Set `anthropicApiKey` in `Config.toml` and export `ANTHROPIC_API_KEY` |
 | `claude` not found | Install Claude Code CLI and verify with `claude --version` |
 | `npx` not found | Install Node.js/npm and verify with `npx --version` |
 | Batch fails because `artifacts/` exists | Move or delete `artifacts/` after reviewing it |

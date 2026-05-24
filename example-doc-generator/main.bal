@@ -98,7 +98,7 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     // ── Phase 1: Pre-flight validation ─────────────────────────────────────
 
     utils:log("[STEP 1] Validating Anthropic API key...");
-    check ai_client:validateApiKey(llmApiKey);
+    check ai_client:validateApiKey(anthropicApiKey);
     utils:log("");
 
     utils:log("[STEP 2] Verifying Claude Code CLI and Playwright MCP...");
@@ -218,7 +218,7 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
             prompts:buildConnectorUserMessage(targetName, codeServerUrl, projectRoot, additionalInstructions);
 
         utils:log("[STEP 8] Calling Anthropic API to generate execution prompt...");
-        ai_client:LlmResult promptResult = check ai_client:callClaude(systemPrompt, userMessage, llmApiKey);
+        ai_client:LlmResult promptResult = check ai_client:callClaude(systemPrompt, userMessage, anthropicApiKey);
         string executionPrompt = promptResult.text;
         promptGenUsage = promptResult.usage;
 
@@ -277,7 +277,7 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
                 string enforcementSystemPrompt = triggerMode ?
                     prompts:buildTriggerDocEnforcementSystemPrompt() :
                     prompts:buildDocEnforcementSystemPrompt();
-                ai_client:LlmResult enfResult = check ai_client:callClaude(enforcementSystemPrompt, rawDoc, llmApiKey);
+                ai_client:LlmResult enfResult = check ai_client:callClaude(enforcementSystemPrompt, rawDoc, anthropicApiKey);
                 io:Error? writeErr = io:fileWriteString(docPath, enfResult.text);
                 if writeErr is io:Error {
                     check error("Could not write enforced doc: " + writeErr.message());

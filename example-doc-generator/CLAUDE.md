@@ -45,7 +45,7 @@ bal build
 
 Required runtime values:
 
-- `llmApiKey` in `Config.toml`
+- `anthropicApiKey` in `Config.toml`
 - `ANTHROPIC_API_KEY` exported for Claude Code / agent execution
 - `docsIntegrator*` and `integrationSamples*` config values only when using
   `with-pr`
@@ -118,7 +118,7 @@ single-run and batch `with-pr` paths still pass the correct repo config.
 
 | Problem | Fix |
 |---------|-----|
-| API key validation failed | Set `llmApiKey` in `Config.toml` and export `ANTHROPIC_API_KEY` |
+| API key validation failed | Set `anthropicApiKey` in `Config.toml` and export `ANTHROPIC_API_KEY` |
 | `claude` not found | Install Claude Code CLI and verify with `claude --version` |
 | `npx` not found | Install Node.js/npm and verify with `npx --version` |
 | Batch fails because `artifacts/` exists | Move or delete `artifacts/` after reviewing it |
