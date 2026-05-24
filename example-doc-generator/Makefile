@@ -133,15 +133,8 @@ setup-bal:
 	bal build
 	@echo "Ballerina build complete."
 
-AGENT_BRIDGE_SDK_JAR ?= $(HOME)/.m2/repository/org/springaicommunity/claude-code-sdk/1.0.0-SNAPSHOT/claude-code-sdk-1.0.0-SNAPSHOT.jar
-BALLERINA_RT_JAR ?= /Library/Ballerina/distributions/ballerina-2201.13.4/bre/lib/ballerina-rt-2201.13.4.jar
-AGENT_BRIDGE_CP = $(BALLERINA_RT_JAR):$(AGENT_BRIDGE_SDK_JAR):$(shell test -d $(HOME)/.m2/repository && find $(HOME)/.m2/repository/org/zeroturnaround $(HOME)/.m2/repository/com/fasterxml $(HOME)/.m2/repository/io/projectreactor $(HOME)/.m2/repository/org/reactivestreams $(HOME)/.m2/repository/org/slf4j $(HOME)/.m2/repository/io/modelcontextprotocol $(HOME)/.m2/repository/com/networknt $(HOME)/.m2/repository/com/ethlo $(HOME)/.m2/repository/org/yaml -name '*.jar' 2>/dev/null | tr '\n' ':' )
-
 build-agent-bridge:
-	@[ -f "$(AGENT_BRIDGE_SDK_JAR)" ] || { echo "Missing $(AGENT_BRIDGE_SDK_JAR). Build/install spring-ai-community/claude-agent-sdk-java first."; exit 1; }
-	mkdir -p target/agent-bridge/classes
-	javac --release 21 -cp "$(AGENT_BRIDGE_CP)" -d target/agent-bridge/classes java/agent-bridge/src/main/java/org/wso2/exampledocgen/agent/ClaudeAgentBridge.java
-	jar --create --file target/agent-bridge/agent-bridge.jar -C target/agent-bridge/classes .
+	gradle -p java/agent-bridge copyAgentBridgeJar
 
 build: setup-bal
 

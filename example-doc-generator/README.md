@@ -21,6 +21,7 @@ Install these first:
 |------|----------|
 | Ballerina | `2201.13.x` |
 | Java | `21` |
+| Gradle | latest |
 | Python | `3.11+` |
 | uv | latest |
 | Node.js | LTS+ |
@@ -302,10 +303,11 @@ make clean-artifacts
 |---------|-----|
 | API key validation failed | Set `llmApiKey` in `Config.toml` and export `ANTHROPIC_API_KEY` |
 | `claude` not found | Install Claude Code CLI and verify with `claude --version` |
+| `npx` not found | Install Node.js/npm and verify with `npx --version` |
 | Batch fails because `artifacts/` exists | Move or delete `artifacts/` after reviewing it |
-| Java Claude SDK adapter build fails | Build/install `spring-ai-community/claude-agent-sdk-java` and rerun `make build-agent-bridge` |
+| Java Claude SDK adapter build fails | Ensure Gradle can resolve dependencies from Maven local/Central, then rerun `make build-agent-bridge` |
 | `uv` not found | Install uv from `https://docs.astral.sh/uv/` |
 | Python dependency error | Run `uv pip install -r python/requirements.txt` inside the venv |
 | Ballerina build error | Run `bal clean && bal build` |
-| Playwright MCP error | Run `python/.venv/bin/playwright install chromium` |
+| Playwright MCP error | Verify with `npx --yes @playwright/mcp@latest --help` |
 | Need to clear generated output | Run `rm -rf artifacts` after reviewing the output |

@@ -9,6 +9,10 @@ Dependencies.toml
 *.bala
 *.jar
 
+# Gradle build artifacts
+java/agent-bridge/.gradle/
+java/agent-bridge/build/
+
 # IDE & editor
 .vscode/
 .idea/

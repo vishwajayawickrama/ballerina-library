@@ -1,0 +1,51 @@
+plugins {
+    id "java-library"
+}
+
+group = "org.wso2.exampledocgen"
+version = "0.1.0"
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+def ballerinaRtJar = providers.gradleProperty("ballerinaRtJar")
+        .orElse(providers.environmentVariable("BALLERINA_RT_JAR"))
+        .orElse("/Library/Ballerina/distributions/ballerina-2201.13.4/bre/lib/ballerina-rt-2201.13.4.jar")
+
+dependencies {
+    compileOnly files(ballerinaRtJar)
+    implementation "org.springaicommunity:claude-code-sdk:1.0.0-SNAPSHOT"
+    implementation "com.fasterxml.jackson.core:jackson-core:2.17.2"
+    implementation "com.fasterxml.jackson.core:jackson-databind:2.17.2"
+    implementation "com.fasterxml.jackson.core:jackson-annotations:2.17.2"
+}
+
+configurations.configureEach {
+    exclude group: "org.slf4j", module: "slf4j-api"
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+}
+
+tasks.jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from {
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+    exclude "META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA"
+}
+
+tasks.register("copyAgentBridgeJar", Copy) {
+    dependsOn tasks.jar
+    from tasks.jar
+    into layout.projectDirectory.dir("../../target/agent-bridge")
+    rename { "agent-bridge.jar" }
+}
+
+tasks.build {
+    dependsOn tasks.copyAgentBridgeJar
+}

@@ -33,13 +33,10 @@ import org.springaicommunity.claude.agent.sdk.types.SystemMessage;
 import org.springaicommunity.claude.agent.sdk.types.TextBlock;
 import org.springaicommunity.claude.agent.sdk.types.ToolUseBlock;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -54,14 +51,6 @@ public final class ClaudeAgentBridge {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private ClaudeAgentBridge() {
-    }
-
-    public static BString resolveClaudePath() {
-        try {
-            return event("resolved", Map.of("text", resolveClaudeExecutable()));
-        } catch (Exception e) {
-            return errorEvent(e);
-        }
     }
 
     public static Object openSession(BString configJson, BString prompt) {
@@ -221,75 +210,6 @@ public final class ClaudeAgentBridge {
         } catch (JsonProcessingException e) {
             return String.valueOf(input);
         }
-    }
-
-    private static String resolveClaudeExecutable() throws IOException, InterruptedException {
-        String envPath = System.getenv("CLAUDE_CLI_PATH");
-        if (envPath != null && !envPath.isBlank() && isWorkingClaudeCommand(Path.of(envPath))) {
-            return envPath;
-        }
-
-        if (canRunCommand("claude")) {
-            return "claude";
-        }
-
-        String home = System.getProperty("user.home");
-        List<Path> candidates = new ArrayList<>();
-        candidates.add(Path.of("/opt/homebrew/bin/claude"));
-        candidates.add(Path.of("/usr/local/bin/claude"));
-        candidates.add(Path.of(home, ".local/bin/claude"));
-        candidates.add(Path.of(home, ".npm-global/bin/claude"));
-        candidates.add(Path.of(home, ".yarn/bin/claude"));
-        candidates.add(Path.of(home, ".bun/bin/claude"));
-        candidates.add(Path.of(home, ".nvm/versions/node/latest/bin/claude"));
-        candidates.addAll(nvmClaudeCandidates(Path.of(home, ".nvm/versions/node")));
-
-        for (Path candidate : candidates) {
-            if (isWorkingClaudeCommand(candidate)) {
-                return candidate.toString();
-            }
-        }
-
-        throw new IOException("Claude CLI executable was not found. Install Claude Code CLI, or set CLAUDE_CLI_PATH "
-                + "to the absolute path of the claude executable before running the pipeline.");
-    }
-
-    private static List<Path> nvmClaudeCandidates(Path nodeVersionsDir) throws IOException {
-        if (!Files.isDirectory(nodeVersionsDir)) {
-            return List.of();
-        }
-        try (var stream = Files.list(nodeVersionsDir)) {
-            return stream
-                    .filter(Files::isDirectory)
-                    .sorted(Comparator.reverseOrder())
-                    .map(path -> path.resolve("bin/claude"))
-                    .toList();
-        }
-    }
-
-    private static boolean canRunCommand(String command) throws IOException, InterruptedException {
-        return runVersionCommand(command);
-    }
-
-    private static boolean isWorkingClaudeCommand(Path path) throws IOException, InterruptedException {
-        return Files.isRegularFile(path) && Files.isExecutable(path) && runVersionCommand(path.toString());
-    }
-
-    private static boolean runVersionCommand(String command) throws IOException, InterruptedException {
-        Process process;
-        try {
-            process = new ProcessBuilder(command, "--version")
-                    .redirectErrorStream(true)
-                    .start();
-        } catch (IOException e) {
-            return false;
-        }
-        boolean exited = process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
-        if (!exited) {
-            process.destroyForcibly();
-            return false;
-        }
-        return process.exitValue() == 0;
     }
 
     private static String requiredString(Map<String, Object> values, String key) {

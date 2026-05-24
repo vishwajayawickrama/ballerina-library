@@ -17,6 +17,58 @@
 import ballerina/os;
 import ballerina/lang.runtime;
 
+# Checks whether the Claude Code CLI is available on PATH.
+#
+# + return - true if `claude --version` succeeds, false otherwise
+public function checkClaudeCodeInstalled() returns boolean {
+    os:Process|error proc = os:exec({
+        value: "claude",
+        arguments: ["--version"]
+    });
+    if proc is error {
+        return false;
+    }
+    int|error exitCode = proc.waitForExit();
+    return exitCode is int && exitCode == 0;
+}
+
+# Returns the Claude Code CLI version output.
+#
+# + return - version text, or an error
+public function getClaudeCodeVersion() returns string|error {
+    return check commandOutput("claude", ["--version"]);
+}
+
+# Checks whether npx is available on PATH.
+#
+# + return - true if `npx --version` succeeds, false otherwise
+public function checkNpxInstalled() returns boolean {
+    os:Process|error proc = os:exec({
+        value: "npx",
+        arguments: ["--version"]
+    });
+    if proc is error {
+        return false;
+    }
+    int|error exitCode = proc.waitForExit();
+    return exitCode is int && exitCode == 0;
+}
+
+# Checks whether Playwright MCP can be launched through npx.
+#
+# + return - true if `npx --yes @playwright/mcp@latest --help` succeeds, false otherwise
+public function checkPlaywrightMcpAvailable() returns boolean {
+    os:Process|error proc = os:exec({
+        value: "npx",
+        arguments: ["--yes", "@playwright/mcp@latest", "--help"]
+    });
+    if proc is error {
+        return false;
+    }
+    int|error exitCode = proc.waitForExit();
+    return exitCode is int && exitCode == 0;
+}
+
 # Checks whether the code-server binary is available on PATH.
 # Runs `code-server --version`; a zero exit code means it is installed.
 # + return - true if code-server is installed, false otherwise
@@ -160,4 +212,30 @@ public function startCodeServer(int port) returns error? {
         attempts += 1;
     }
     return error("Code-server did not become ready within 15 seconds on port " + port.toString());
+}
+
+function commandOutput(string value, string[] arguments) returns string|error {
+    os:Process|error proc = os:exec({
+        value: value,
+        arguments: arguments
+    });
+    if proc is error {
+        return error("Failed to launch `" + value + "`: " + proc.message());
+    }
+    byte[]|error outBytes = proc.output();
+    int|error exitCode = proc.waitForExit();
+    if exitCode is error {
+        return error("Command `" + value + "` failed: " + exitCode.message());
+    }
+    if exitCode != 0 {
+        return error("Command `" + value + "` failed with exit code: " + exitCode.toString());
+    }
+    if outBytes is error {
+        return error("Could not read output from `" + value + "`: " + outBytes.message());
+    }
+    string|error outStr = string:fromBytes(outBytes);
+    if outStr is error {
+        return error("Could not decode output from `" + value + "`: " + outStr.message());
+    }
+    return outStr.trim();
 }

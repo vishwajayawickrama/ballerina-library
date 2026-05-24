@@ -16,18 +16,6 @@
 
 import ballerina/jballerina.java;
 
-# Resolves the Claude CLI executable using the SDK adapter's standard lookup rules.
-#
-# + return - the Claude executable path/command, or an error
-public function resolveClaudePath() returns string|error {
-    string result = nativeResolveClaudePath();
-    AgentEvent event = check parseEvent(result);
-    if event.'type == "error" {
-        return error(event.text ?: "Could not resolve Claude CLI executable");
-    }
-    return event.text ?: "claude";
-}
-
 # Opens a Claude Agent SDK session and starts receiving messages for the prompt.
 #
 # + config - SDK session configuration
@@ -62,11 +50,6 @@ function parseEvent(string eventJson) returns AgentEvent|error {
     json body = check eventJson.fromJsonString();
     return check body.cloneWithType(AgentEvent);
 }
-
-function nativeResolveClaudePath() returns string = @java:Method {
-    'class: "org.wso2.exampledocgen.agent.ClaudeAgentBridge",
-    name: "resolveClaudePath"
-} external;
 
 function nativeOpenSession(string configJson, string prompt) returns handle = @java:Method {
     'class: "org.wso2.exampledocgen.agent.ClaudeAgentBridge",

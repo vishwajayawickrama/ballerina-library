@@ -68,10 +68,8 @@ workflow sections beyond what the execution prompt requires.`;
 
 # Initializes the Claude agent SDK wrapper.
 #
-# + return - an error if the Java SDK adapter could not resolve Claude Code
+# + return - nil; preflight checks are performed by main.bal
 public function initAgentBridge() returns error? {
-    string claudePath = check claude_agent_sdk:resolveClaudePath();
-    utils:log("\t[INFO] Claude CLI: " + claudePath);
 }
 
 # Runs Claude Agent SDK from Ballerina using the internal SDK module.
@@ -86,8 +84,8 @@ public function runClaudeAgent(string promptPath) returns AgentCost?|error {
 
     string|error cwdResult = file:getCurrentDir();
     string projectRoot = check cwdResult;
-    string claudePath = check claude_agent_sdk:resolveClaudePath();
-    utils:log("\t[INFO] Claude CLI: " + claudePath);
+    string claudePath = "claude";
+    utils:log("\t[INFO] Claude CLI command: " + claudePath);
 
     claude_agent_sdk:AgentConfig config = {
         model: MODEL,
@@ -97,8 +95,10 @@ public function runClaudeAgent(string promptPath) returns AgentCost?|error {
         mcpServers: [
             {
                 name: "playwright",
-                command: "/opt/homebrew/bin/playwright-mcp",
+                command: "npx",
                 arguments: [
+                    "--yes",
+                    "@playwright/mcp@latest",
                     "--headless",
                     "--viewport-size=1720,968",
                     "--output-dir=" + projectRoot + "/artifacts/screenshots",

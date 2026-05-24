@@ -93,8 +93,20 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     check ai_client:validateApiKey(llmApiKey);
     utils:log("");
 
-    utils:log("[STEP 2] Skipping Claude Code CLI pre-flight check...");
-    utils:log("\t[INFO] Claude agent SDK will resolve the Claude runtime during agent execution.");
+    utils:log("[STEP 2] Verifying Claude Code CLI and Playwright MCP...");
+    if !utils:checkClaudeCodeInstalled() {
+        return error("Claude Code CLI not found on PATH. Install it with `npm install -g @anthropic-ai/claude-code`, then verify with `claude --version`.");
+    }
+    string claudeVersion = check utils:getClaudeCodeVersion();
+    utils:log("\t[INFO] Claude Code CLI: " + claudeVersion);
+    if !utils:checkNpxInstalled() {
+        return error("npx not found on PATH. Install Node.js/npm, then verify with `npx --version`.");
+    }
+    utils:log("\t[INFO] npx is available.");
+    if !utils:checkPlaywrightMcpAvailable() {
+        return error("Playwright MCP is not available through npx. Verify with `npx --yes @playwright/mcp@latest --help`.");
+    }
+    utils:log("\t[INFO] Playwright MCP is available through npx.");
     utils:log("");
 
     // ── Phase 2: Infrastructure ─────────────────────────────────────────────
