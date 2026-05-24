@@ -107,3 +107,10 @@ public type ScreenshotCropSummary record {|
     # Per-file results.
     ScreenshotCropFileResult[] files = [];
 |};
+
+type ImageBridgeResponse record {|
+    string 'type;
+    string? message = ();
+    ImageInfo? info = ();
+    CropResult? result = ();
+|};

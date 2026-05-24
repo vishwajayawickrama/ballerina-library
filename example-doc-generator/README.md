@@ -22,8 +22,6 @@ Install these first:
 | Ballerina | `2201.13.x` |
 | Java | `21` |
 | Gradle | latest |
-| Python | `3.11+` |
-| uv | latest |
 | Node.js | LTS+ |
 | Claude Code CLI | latest |
 | Anthropic API key | for Ballerina API calls and Claude agent execution |
@@ -40,31 +38,19 @@ Run all commands from `example-doc-generator/`.
 cp Config.toml.example Config.toml
 ```
 
-Set `llmApiKey` in `Config.toml`.
+Set `llmApiKey` in `Config.toml`. If you plan to publish connector output with
+`with-pr`, also set the docs-integrator and integration-samples fork values.
 
-2. Create the Python scripts config:
-
-```bash
-cp .env.example .env
-```
-
-At minimum, set `DOCS_INTEGRATOR_FORK` if you plan to publish connector output.
-
-3. Export the Anthropic key for Claude agent execution:
+2. Export the Anthropic key for Claude agent execution:
 
 ```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
-4. Install Python helper dependencies and build the Ballerina app:
+3. Build the Ballerina app:
 
 ```bash
-cd python
-uv venv
-uv pip install -r requirements.txt
-.venv/bin/playwright install chromium
-cd ..
-make build-native-bridge
+gradle -p java/native-bridge copyNativeBridgeJar
 bal build
 ```
 
@@ -87,6 +73,16 @@ With extra guidance:
 ```bash
 bal run -- zoom.meetings "Use BearerTokenConfig for authentication."
 ```
+
+To publish the generated connector guide, screenshots, and integration sample,
+commit and push them, and create PRs, add `with-pr`:
+
+```bash
+bal run -- snowflake with-pr
+```
+
+Without `with-pr`, the pipeline only writes local artifacts and does not modify
+`docs-integrator` or `integration-samples`.
 
 ## Run One Trigger
 
@@ -141,7 +137,8 @@ Rules:
 - `type` is required and must be `connector` or `trigger`.
 - `name` is required.
 - `instructions` is optional.
-- Batch mode does not resume, does not dry-run, and does not create PRs.
+- Batch mode does not resume or dry-run.
+- Batch mode creates docs and sample PRs only when `with-pr` is passed.
 - Batch mode fails fast if `artifacts/` already exists to avoid archiving stale output.
 - Pressing `Ctrl+C` stops the active child pipeline before the batch exits.
 
@@ -161,6 +158,13 @@ With a longer per-item timeout:
 
 ```bash
 bal run -- batch config=batch_items.json timeout=7200
+```
+
+To publish connector docs and samples from each successful batch item into
+batch branches and create PRs at the end:
+
+```bash
+bal run -- batch config=batch_items.json with-pr
 ```
 
 ## What a Run Produces
@@ -183,27 +187,24 @@ closed automatically.
 
 ## Publishing Connector Output
 
-The publishing helpers are connector-focused Python scripts. Run them after
-reviewing generated output.
+Publishing is integrated into the Ballerina pipeline and is opt-in. Passing
+`with-pr` copies the generated connector `example.md` and screenshots into the
+local `docs-integrator` fork, updates `en/sidebars.ts`, copies the generated
+Ballerina project into the local `integration-samples` fork, commits both repos,
+pushes both branches, and creates PRs with `gh`.
 
-```bash
-python/.venv/bin/python python/publish_docs.py
-python/.venv/bin/python python/publish_sample.py
-python/.venv/bin/python python/publish_all.py
-```
+The publisher uses these `Config.toml` values:
 
-Dry-run variants:
+- `docsIntegratorRepo`, default `../../docs-integrator`
+- `docsIntegratorFork`, or the fork inferred from the docs repo `origin`
+- `docsIntegratorUpstream`, default `wso2/docs-integrator`
+- `docsIntegratorBaseBranch`, default `main`
+- `integrationSamplesRepo`, default `../../integration-samples`
+- `integrationSamplesFork`, or the fork inferred from the samples repo `origin`
+- `integrationSamplesUpstream`, default `wso2/integration-samples`
+- `integrationSamplesBaseBranch`, default `main`
 
-```bash
-python/.venv/bin/python python/publish_docs.py --dry-run
-python/.venv/bin/python python/publish_sample.py --dry-run
-python/.venv/bin/python python/publish_all.py --dry-run
-```
-
-For batch output, review each archived item under `artifacts_archive/`.
-Connector publishing can still use the existing publish scripts after you
-choose the artifact or project to publish. Trigger publish helpers are not
-automated yet, so review and publish trigger artifacts manually.
+Trigger publishing is not automated yet.
 
 ## Run In GitHub Actions
 
@@ -220,6 +221,7 @@ Required repository/environment secrets:
 |--------|--------------|-------------|
 | `LLM_API_KEY` | generation | Anthropic API key used by Ballerina and Claude Code |
 | `DOCS_INTEGRATOR_TOKEN` | connector publishing only | Token with permission to push to the docs-integrator fork and create PRs |
+| `INTEGRATION_SAMPLES_TOKEN` | connector publishing only | Token with permission to push to the integration-samples fork and create PRs |
 
 Workflow inputs:
 
@@ -232,6 +234,9 @@ Workflow inputs:
 | `docsIntegratorFork` | required when `publishConnector` is `true` |
 | `docsIntegratorUpstream` | defaults to `wso2/docs-integrator` |
 | `docsIntegratorBaseBranch` | defaults to `main` |
+| `integrationSamplesFork` | required when `publishConnector` is `true` |
+| `integrationSamplesUpstream` | defaults to `wso2/integration-samples` |
+| `integrationSamplesBaseBranch` | defaults to `main` |
 
 Examples:
 
@@ -255,6 +260,7 @@ name: zoom.meetings
 instructions: Use BearerTokenConfig for authentication.
 publishConnector: true
 docsIntegratorFork: your-org/docs-integrator
+integrationSamplesFork: your-org/integration-samples
 ```
 
 After the workflow completes, open the workflow run summary and download the
@@ -267,35 +273,19 @@ locally with `bal run -- batch config=batch_items.json`.
 ## Java Agent Bridge
 
 The pipeline calls the Claude agent through Ballerina Java interop. Build the
-bridge before `bal build` or use the Make targets, which do this automatically:
+bridge before `bal build`:
 
 ```bash
-make build-native-bridge
+gradle -p java/native-bridge copyNativeBridgeJar
 ```
 
 The bridge expects `org.springaicommunity:claude-code-sdk:1.0.0-SNAPSHOT` in the
 local Maven cache. If it is missing, build/install
 `spring-ai-community/claude-agent-sdk-java` first.
 
-## Optional Make Commands
-
-Make targets exist as shortcuts for setup, runs, publishing, screenshots, and
-cleanup. They are optional wrappers around the commands above. For the full list
-of targets and override variables, run:
-
-```bash
-make help
-```
-
-Common shortcuts:
-
-```bash
-make setup
-make run CONNECTOR=mysql
-make run-trigger TRIGGER=trigger.github
-make batch-run
-make clean-artifacts
-```
+If VS Code still reports that `ClaudeAgentBridge.java` is not on the classpath,
+run `Java: Clean Java Language Server Workspace` from the command palette and
+reload the window. The Java Gradle project lives under `java/native-bridge`.
 
 ## Troubleshooting
 
@@ -305,9 +295,8 @@ make clean-artifacts
 | `claude` not found | Install Claude Code CLI and verify with `claude --version` |
 | `npx` not found | Install Node.js/npm and verify with `npx --version` |
 | Batch fails because `artifacts/` exists | Move or delete `artifacts/` after reviewing it |
-| Java native bridge build fails | Ensure Gradle can resolve dependencies from Maven local/Central, then rerun `make build-native-bridge` |
-| `uv` not found | Install uv from `https://docs.astral.sh/uv/` |
-| Python dependency error | Run `uv pip install -r python/requirements.txt` inside the venv |
+| Java native bridge build fails | Ensure Gradle can resolve dependencies from Maven local/Central, then rerun `gradle -p java/native-bridge copyNativeBridgeJar` |
+| PR creation fails | Verify `gh auth status` and both publishing fork remotes |
 | Ballerina build error | Run `bal clean && bal build` |
 | Playwright MCP error | Verify with `npx --yes @playwright/mcp@latest --help` |
 | Need to clear generated output | Run `rm -rf artifacts` after reviewing the output |

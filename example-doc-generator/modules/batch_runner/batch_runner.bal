@@ -19,40 +19,18 @@ import ballerina/io;
 import ballerina/os;
 import ballerina/time;
 
+import wso2/example_doc_generator.docs_publisher;
+
 const string DEFAULT_CONFIG = "batch_items.json";
 const string ARTIFACTS_DIR = "./artifacts";
 const string ARCHIVE_DIR = "./artifacts_archive";
 const int DEFAULT_TIMEOUT_SECONDS = 7200;
 
-type BatchConfig record {|
-    BatchItem[] items;
-|};
-
-type BatchItem record {|
-    string name?;
-    string 'type?;
-    string instructions?;
-|};
-
-type BatchResult record {|
-    string name;
-    string 'type;
-    string slug;
-    string status;
-    decimal duration;
-    decimal? cost;
-    string? projectPath;
-    string archiveDir;
-|};
-
-type RunCost record {|
-    decimal? totalCombinedCostUsd?;
-    decimal? durationSeconds?;
-|};
-
-public function runBatch(string arg1 = "", string arg2 = "", string arg3 = "") returns error? {
+public function runBatch(string arg1 = "", string arg2 = "", string arg3 = "",
+        docs_publisher:PublishOptions publishOptions = {}) returns error? {
     string configPath = DEFAULT_CONFIG;
     int timeoutSeconds = DEFAULT_TIMEOUT_SECONDS;
+    boolean publishWithPr = false;
 
     foreach string arg in [arg1, arg2, arg3] {
         string trimmed = arg.trim();
@@ -67,9 +45,11 @@ public function runBatch(string arg1 = "", string arg2 = "", string arg3 = "") r
                 return error("Invalid batch timeout. Use timeout=<positive seconds>.");
             }
             timeoutSeconds = parsedTimeout;
+        } else if trimmed == "with-pr" {
+            publishWithPr = true;
         } else {
             return error("Unsupported batch option: " + trimmed +
-                ". Supported options: config=<path>, timeout=<seconds>.");
+                ". Supported options: config=<path>, timeout=<seconds>, with-pr.");
         }
     }
 
@@ -140,6 +120,28 @@ public function runBatch(string arg1 = "", string arg2 = "", string arg3 = "") r
 
         if success {
             io:println("\n[OK] " + name + " completed in " + duration.toString() + "s");
+            if publishWithPr && kind == "connector" {
+                io:println("[INFO] Publishing connector docs and sample to batch branches...");
+                docs_publisher:PublishAllResult publishResult = check docs_publisher:publishDocsAndSamples({
+                    artifactsDir: archivePath,
+                    docsRepo: publishOptions.docsRepo,
+                    forkSlug: publishOptions.forkSlug,
+                    upstream: publishOptions.upstream,
+                    baseBranch: publishOptions.baseBranch,
+                    category: publishOptions.category,
+                    branch: publishOptions.branch,
+                    samplesRepo: publishOptions.samplesRepo,
+                    samplesForkSlug: publishOptions.samplesForkSlug,
+                    samplesUpstream: publishOptions.samplesUpstream,
+                    samplesBaseBranch: publishOptions.samplesBaseBranch,
+                    samplesBranch: publishOptions.samplesBranch,
+                    batchBranch: true
+                });
+                io:println("[INFO] Published docs branch: " + publishResult.docs.branch);
+                io:println("[INFO] Published sample branch: " + publishResult.sample.branch);
+            } else if publishWithPr && kind == "trigger" {
+                io:println("[INFO] Trigger docs/sample publishing is not supported; skipping publish.");
+            }
         } else {
             io:println("\n[FAILED] " + name + " failed after " + duration.toString() + "s");
         }
@@ -154,6 +156,15 @@ public function runBatch(string arg1 = "", string arg2 = "", string arg3 = "") r
 
     if hasFailed(results) {
         return error("One or more batch items failed.");
+    }
+
+    if publishWithPr {
+        string batchBranch = publishOptions.branch ?: "docs/connector-docs";
+        string prUrl = check docs_publisher:createBatchPullRequest(batchBranch, publishOptions);
+        io:println("[INFO] Batch docs pull request: " + prUrl);
+        string sampleBatchBranch = publishOptions.samplesBranch ?: "samples/connector-samples";
+        string samplePrUrl = check docs_publisher:createBatchSamplePullRequest(sampleBatchBranch, publishOptions);
+        io:println("[INFO] Batch sample pull request: " + samplePrUrl);
     }
 }
 
@@ -437,7 +448,7 @@ function buildSummary(BatchResult[] results) returns string|error {
                 summary += "# " + result.name + "\n" +
                     "Review generated artifacts in " + result.archiveDir + "\n";
                 if result.'type == "connector" {
-                    summary += "Publish connector docs/samples manually with the existing publish targets if needed.\n";
+                    summary += "Run batch with with-pr to publish connector docs and samples.\n";
                 } else {
                     summary += "Trigger publish helpers are not automated yet; publish trigger artifacts manually.\n";
                 }

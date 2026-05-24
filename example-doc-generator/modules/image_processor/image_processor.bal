@@ -92,13 +92,6 @@ public function cropScreenshots(ScreenshotCropOptions options = {}) returns Scre
     return summary;
 }
 
-type ImageBridgeResponse record {|
-    string 'type;
-    string? message = ();
-    ImageInfo? info = ();
-    CropResult? result = ();
-|};
-
 function cropOne(string path, ScreenshotCropOptions options) returns ScreenshotCropFileResult|error {
     ImageInfo info = check readInfo(path);
     CropMargins margins = options.margins;

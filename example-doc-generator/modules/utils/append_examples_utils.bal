@@ -20,11 +20,6 @@ import ballerina/lang.regexp;
 
 const string CENTRAL_API_BASE = "https://api.central.ballerina.io";
 
-// Open record — only readme is needed; extra fields are silently ignored
-type CentralPackageMetadata record {
-    string readme?;
-};
-
 // Finds the Examples section (any heading level, case-insensitive) in a readme,
 // and returns its body up to the next same-or-higher-level heading, or nil if not found.
 isolated function extractExamplesSection(string readme) returns string? {

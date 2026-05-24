@@ -22,6 +22,7 @@ import ballerina/time;
 import wso2/example_doc_generator.agent_client;
 import wso2/example_doc_generator.ai_client;
 import wso2/example_doc_generator.batch_runner;
+import wso2/example_doc_generator.docs_publisher;
 import wso2/example_doc_generator.prompts;
 import wso2/example_doc_generator.utils;
 
@@ -49,9 +50,11 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     }
 
     if modeOrConnectorName == "batch" {
-        check batch_runner:runBatch(arg2, arg3, arg4);
+        check batch_runner:runBatch(arg2, arg3, arg4, docsPublishOptions());
         return;
     }
+
+    boolean publishWithPr = hasArg("with-pr", [arg2, arg3, arg4]);
 
     boolean promptReplayMode = modeOrConnectorName == "prompt";
     string replayPromptPath = promptReplayMode ? arg2.trim() : "";
@@ -71,7 +74,7 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
             "Connector name is required. Usage: bal run -- <connectorName> [additionalInstructions]");
     }
     string triggerPackage = triggerMode ? "ballerinax/" + targetName : "";
-    string additionalInstructions = promptReplayMode ? "" : (triggerMode ? arg3 : arg2);
+    string additionalInstructions = promptReplayMode ? "" : firstNonControlArg(triggerMode ? [arg3, arg4] : [arg2, arg3, arg4]);
 
     utils:log("=== WSO2 Integrator Documentation Pipeline ===");
     utils:log("");
@@ -372,12 +375,32 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     utils:log(string `Direct API total:${totalInputTokens} in / ${totalOutputTokens} out  |  $${totalCostUsd}`);
     utils:log(string `Agent SDK:       $${agentCostUsd}`);
     utils:log(string `COMBINED TOTAL:  $${totalCombinedCostUsd}`);
+
+    if publishWithPr {
+        utils:log("");
+        utils:log("[STEP 17] Publishing generated docs and sample...");
+        if triggerMode {
+            utils:log("\t[INFO] Trigger mode detected — docs/sample publishing is skipped.");
+        } else {
+            docs_publisher:PublishAllResult publishResult = check docs_publisher:publishDocsAndSamples(docsPublishOptions(true));
+            utils:log("\t[INFO] Published docs branch: " + publishResult.docs.branch);
+            string? docsPrUrl = publishResult.docs.prUrl;
+            if docsPrUrl is string {
+                utils:log("\t[INFO] Docs pull request: " + docsPrUrl);
+            }
+            utils:log("\t[INFO] Published sample branch: " + publishResult.sample.branch);
+            string? samplePrUrl = publishResult.sample.prUrl;
+            if samplePrUrl is string {
+                utils:log("\t[INFO] Sample pull request: " + samplePrUrl);
+            }
+        }
+    }
     } on fail error e {
         pipelineErr = e;
     }
 
     utils:log("");
-    utils:log("[STEP 17] Stopping Claude agent SDK...");
+    utils:log("[STEP " + (publishWithPr ? "18" : "17") + "] Stopping Claude agent SDK...");
     error? stopErr = agent_client:stopAgentBridge();
     if stopErr is error {
         utils:log("\t[WARN] Could not stop Claude agent SDK: " + stopErr.message());
@@ -392,6 +415,39 @@ public function main(string modeOrConnectorName, string arg2 = "", string arg3 =
     utils:log("");
     utils:log("=== Pipeline Complete ===");
     utils:log("Artifacts saved under '" + utils:OUTPUT_DIR + "'.");
+}
+
+function docsPublishOptions(boolean createPr = false) returns docs_publisher:PublishOptions {
+    return {
+        docsRepo: docsIntegratorRepo,
+        forkSlug: docsIntegratorFork,
+        upstream: docsIntegratorUpstream,
+        baseBranch: docsIntegratorBaseBranch,
+        samplesRepo: integrationSamplesRepo,
+        samplesForkSlug: integrationSamplesFork,
+        samplesUpstream: integrationSamplesUpstream,
+        samplesBaseBranch: integrationSamplesBaseBranch,
+        createPr
+    };
+}
+
+function hasArg(string expected, string[] args) returns boolean {
+    foreach string arg in args {
+        if arg.trim() == expected {
+            return true;
+        }
+    }
+    return false;
+}
+
+function firstNonControlArg(string[] args) returns string {
+    foreach string arg in args {
+        string trimmed = arg.trim();
+        if trimmed != "" && trimmed != "with-pr" {
+            return arg;
+        }
+    }
+    return "";
 }
 
 function isTriggerPromptPath(string promptPath) returns boolean {

@@ -1,8 +1,6 @@
 # Generated content
 .generated/
 .playground/
-.gradle/
-build/
 *.log
 
 # Ballerina build artifacts
@@ -12,7 +10,8 @@ Dependencies.toml
 *.jar
 
 # IDE & editor
-.vscode/
+.vscode/*
+!.vscode/settings.json
 .idea/
 .gemini/
 *.swp
@@ -25,17 +24,6 @@ package-lock.json
 npm-debug.log
 pnpm-lock.yaml
 yarn.lock
-
-# Python
-python/.venv/
-python/__pycache__/
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-dist/
-.python-version
-python/uv.lock
 
 # OS specific
 Thumbs.db
@@ -64,11 +52,6 @@ tmp/
 temp/
 *.tmp
 .cache/
-
-# Environment
-.env
-.env.local
-.env.*.local
 
 # Ballerina config (contains secrets)
 Config.toml

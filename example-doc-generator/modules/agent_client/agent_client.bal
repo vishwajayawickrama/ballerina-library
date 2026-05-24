@@ -19,8 +19,6 @@ import ballerina/io;
 import wso2/example_doc_generator.claude_agent_sdk;
 import wso2/example_doc_generator.utils;
 
-public type AgentCost claude_agent_sdk:AgentCost;
-
 const string MODEL = "claude-sonnet-4-6";
 const int TIMEOUT_SECONDS = 5400;
 const int MAX_BUFFER_SIZE = 33554432;
@@ -173,9 +171,8 @@ function addRuntimeCompatibilityInstructions(string prompt) returns string {
     return string `## Runtime Tooling Compatibility
 
 This run is executed through the in-process Ballerina Claude agent SDK wrapper.
-Do not look for, start, query, or depend on python/agent_server.py, /health endpoints,
-/run endpoints, or any local REST agent server. The Ballerina pipeline has already
-launched this agent.
+Do not look for, start, query, or depend on /health endpoints, /run endpoints,
+or any local REST agent server. The Ballerina pipeline has already launched this agent.
 
 Browser automation tools are exposed as Claude Code MCP tools with names like:
 - mcp__playwright__browser_navigate

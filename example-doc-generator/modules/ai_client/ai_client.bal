@@ -17,36 +17,6 @@
 import ballerina/http;
 import wso2/example_doc_generator.utils;
 
-# Anthropic message content block.
-type ContentBlock record {
-    # The type of content block (e.g. "text")
-    string 'type;
-    # The text content (present when type is "text")
-    string text?;
-};
-
-# Anthropic token usage info.
-type UsageInfo record {
-    # Number of input tokens consumed
-    int input_tokens;
-    # Number of output tokens generated
-    int output_tokens;
-};
-
-# Anthropic Messages API response (partial — only fields we need).
-type MessagesResponse record {
-    # Unique identifier for this message
-    string id;
-    # The model used to generate the response
-    string model;
-    # The reason the model stopped generating
-    string stop_reason?;
-    # The content blocks in the response
-    ContentBlock[] content;
-    # Token usage for this response
-    UsageInfo? usage;
-};
-
 # Default Claude model to use.
 const string DEFAULT_MODEL = "claude-sonnet-4-6";
 
@@ -61,24 +31,6 @@ final decimal INPUT_COST_PER_TOKEN = 0.000003d;
 
 # Claude Sonnet 4.6 pricing: $15.00 per million output tokens.
 final decimal OUTPUT_COST_PER_TOKEN = 0.000015d;
-
-# Token usage and USD cost for a single LLM API call.
-public type LlmUsage record {
-    # Number of input (prompt) tokens consumed
-    int inputTokens;
-    # Number of output (completion) tokens generated
-    int outputTokens;
-    # Estimated cost in USD based on model pricing
-    decimal costUsd;
-};
-
-# Result of a Claude API call — the generated text plus token usage/cost.
-public type LlmResult record {
-    # The generated text content
-    string text;
-    # Token usage and cost for this call
-    LlmUsage usage;
-};
 
 # Validates the Anthropic API key by sending a minimal test request.
 # Logs a clean success message or extracts and displays error details.
@@ -214,4 +166,3 @@ public function callClaude(string systemPrompt, string userMessage, string apiKe
 
     return {text: resultText, usage: usageData};
 }
-

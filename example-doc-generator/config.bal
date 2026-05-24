@@ -23,6 +23,18 @@ configurable string llmApiKey = ?;
 // === Service Ports ===
 configurable int codeServerPort = 8080;
 
+// === Docs Integrator Publishing ===
+configurable string docsIntegratorRepo = "../../docs-integrator";
+configurable string docsIntegratorFork = "";
+configurable string docsIntegratorUpstream = "wso2/docs-integrator";
+configurable string docsIntegratorBaseBranch = "main";
+
+// === Integration Samples Publishing ===
+configurable string integrationSamplesRepo = "../../integration-samples";
+configurable string integrationSamplesFork = "";
+configurable string integrationSamplesUpstream = "wso2/integration-samples";
+configurable string integrationSamplesBaseBranch = "main";
+
 // Deprecated and ignored. Kept temporarily so existing Config.toml files that
 // still define this value do not break local runs.
 configurable int agentServerPort = 8765;

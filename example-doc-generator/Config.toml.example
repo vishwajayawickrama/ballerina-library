@@ -13,6 +13,18 @@ llmApiKey = ""
 # Start manually with: code-server --auth none --bind-addr 0.0.0.0:8080
 codeServerPort = 8080
 
+# Local docs-integrator fork used only when running with `with-pr`.
+docsIntegratorRepo = "../../docs-integrator"
+docsIntegratorFork = "your-org/docs-integrator"
+docsIntegratorUpstream = "wso2/docs-integrator"
+docsIntegratorBaseBranch = "main"
+
+# Local integration-samples fork used only when running with `with-pr`.
+integrationSamplesRepo = "../../integration-samples"
+integrationSamplesFork = "your-org/integration-samples"
+integrationSamplesUpstream = "wso2/integration-samples"
+integrationSamplesBaseBranch = "main"
+
 # Additional instructions for the agent (optional)
 # Use this to provide connector-specific guidance that the agent must follow,
 # e.g. which authentication type to use, which operation to call, or any
