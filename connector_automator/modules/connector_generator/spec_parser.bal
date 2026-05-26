@@ -18,18 +18,72 @@ public function parseApiSpec(string apiSpecPath) returns ParsedApiSpec|error {
     SpecMethodSignature[] methods = [];
     string configTypeName = "ConnectionConfig";
     string[] lines = regex:split(clientBlock, "\n");
+    string currentSignature = "";
+    boolean collectingSignature = false;
+    string currentInit = "";
+    boolean collectingInit = false;
     foreach string rawLine in lines {
         string line = rawLine.trim();
+        if collectingSignature {
+            currentSignature = currentSignature + " " + line;
+            if isCompleteDeclaration(currentSignature) {
+                SpecMethodSignature|error parsed = parseMethodSignature(currentSignature);
+                if parsed is SpecMethodSignature {
+                    methods.push(parsed);
+                } else {
+                    return parsed;
+                }
+                currentSignature = "";
+                collectingSignature = false;
+            }
+            continue;
+        }
         if line.startsWith("remote isolated function ") {
-            SpecMethodSignature|error parsed = parseMethodSignature(line);
-            if parsed is SpecMethodSignature {
-                methods.push(parsed);
+            if isCompleteDeclaration(line) {
+                SpecMethodSignature|error parsed = parseMethodSignature(line);
+                if parsed is SpecMethodSignature {
+                    methods.push(parsed);
+                } else {
+                    return parsed;
+                }
+            } else {
+                currentSignature = line;
+                collectingSignature = true;
+            }
+        } else if collectingInit {
+            currentInit = currentInit + " " + line;
+            if isCompleteDeclaration(currentInit) {
+                string extracted = extractInitConfigType(currentInit);
+                if extracted.length() > 0 {
+                    configTypeName = extracted;
+                }
+                currentInit = "";
+                collectingInit = false;
             }
         } else if line.includes("function init(") {
-            string extracted = extractInitConfigType(line);
-            if extracted.length() > 0 {
-                configTypeName = extracted;
+            if isCompleteDeclaration(line) {
+                string extracted = extractInitConfigType(line);
+                if extracted.length() > 0 {
+                    configTypeName = extracted;
+                }
+            } else {
+                currentInit = line;
+                collectingInit = true;
             }
+        }
+    }
+    if collectingSignature {
+        SpecMethodSignature|error parsed = parseMethodSignature(currentSignature);
+        if parsed is SpecMethodSignature {
+            methods.push(parsed);
+        } else {
+            return parsed;
+        }
+    }
+    if collectingInit {
+        string extracted = extractInitConfigType(currentInit);
+        if extracted.length() > 0 {
+            configTypeName = extracted;
         }
     }
 
@@ -84,6 +138,9 @@ function parseMethodSignature(string line) returns SpecMethodSignature|error {
     if returnType.endsWith("{") {
         returnType = returnType.substring(0, returnType.length() - 1).trim();
     }
+    if returnType.endsWith(";") {
+        returnType = returnType.substring(0, returnType.length() - 1).trim();
+    }
 
     SpecMethodParameter[] params = [];
     if paramsSegment.length() > 0 {
@@ -101,6 +158,20 @@ function parseMethodSignature(string line) returns SpecMethodSignature|error {
         parameters: params,
         returnType: returnType
     };
+}
+
+function isCompleteDeclaration(string line) returns boolean {
+    int parenDepth = 0;
+    foreach int i in 0 ..< line.length() {
+        string ch = line.substring(i, i + 1);
+        if ch == "(" {
+            parenDepth += 1;
+        } else if ch == ")" && parenDepth > 0 {
+            parenDepth -= 1;
+        }
+    }
+    string trimmed = line.trim();
+    return parenDepth == 0 && (trimmed.endsWith(";") || trimmed.endsWith("{") || trimmed.includes(") returns "));
 }
 
 function splitSignatureParameters(string paramsSegment) returns string[] {

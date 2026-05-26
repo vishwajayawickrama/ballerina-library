@@ -122,10 +122,10 @@ function parseCommandLineArgs(string[] args) returns AnalyzerConfig {
             }
             _ => {
                 if arg.includes("=") {
-                    string[] parts = regex:split(arg, "=");
-                    if parts.length() == 2 {
-                        string key = parts[0].trim();
-                        string value = parts[1].trim();
+                    int? equalsIdx = arg.indexOf("=");
+                    if equalsIdx is int {
+                        string key = arg.substring(0, <int>equalsIdx).trim();
+                        string value = arg.substring(<int>equalsIdx + 1).trim();
 
                         match key {
                             "exclude-packages"|"--exclude-packages" => {

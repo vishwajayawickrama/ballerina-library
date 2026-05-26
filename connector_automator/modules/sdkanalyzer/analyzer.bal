@@ -108,6 +108,9 @@ public function analyzeJavaSDK(string jarPath, string outputDir, AnalyzerConfig 
 
     // Get top 5 candidates with scores
     [ClassInfo, LLMClientScore][] topCandidates = clientResult;
+    if topCandidates.length() == 0 {
+        return error AnalyzerError("No root client candidates returned by LLM");
+    }
 
     ClassInfo rootClient = selectRootClientCandidate(topCandidates);
 
@@ -188,7 +191,7 @@ public function analyzeJavaSDK(string jarPath, string outputDir, AnalyzerConfig 
     return {
         success: true,
         metadataPath: metadataPath,
-        classesAnalyzed: 1,
+        classesAnalyzed: rawClasses.length(),
         methodsExtracted: selectedMethods.length(),
         durationMs: durationMs,
         warnings: warnings
@@ -449,7 +452,7 @@ function extractDatasetKeyFromJarPath(string jarPath) returns string {
 public function analyzeJarWithJavaParserWrapper(string jarPath, AnalyzerConfig config) returns ClassInfo[]|AnalyzerError {
     ClassInfo[]|error res = parseJarFromReference(jarPath, config);
     if res is error {
-        return <AnalyzerError>res;
+        return error AnalyzerError(res.message(), res);
     }
     return res;
 }
@@ -463,7 +466,7 @@ public function analyzeJarWithJavaParserWrapper(string jarPath, AnalyzerConfig c
 public function analyzeJarWithDependencies(string jarPath, AnalyzerConfig config) returns ParsedJarResult|AnalyzerError {
     ParsedJarResult|error res = parseJarWithDependencies(jarPath, config);
     if res is error {
-        return <AnalyzerError>res;
+        return error AnalyzerError(res.message(), res);
     }
     return res;
 }

@@ -78,11 +78,61 @@ function resolveNativeJavaFilePath(string nativeRootDir, string nativeRelativePa
     if srcExists {
         string leafDir = check findLeafDirectory(srcMainJava);
         string javaFileName = extractJavaFileName(nativeRelativePath);
-        return string `${leafDir}/${javaFileName}`;
+        string packageSubpath = extractJavaPackageSubpath(nativeRelativePath);
+        string resolvedPath = packageSubpath.length() > 0 ?
+            string `${leafDir}/${packageSubpath}/${javaFileName}` : string `${leafDir}/${javaFileName}`;
+        check ensureDir(parentDir(resolvedPath));
+        return normalizePathSeparators(resolvedPath);
     }
     string fallback = toNativeSourcePath(nativeRootDir, nativeRelativePath);
     check ensureDir(parentDir(fallback));
     return fallback;
+}
+
+function extractJavaPackageSubpath(string nativeRelativePath) returns string {
+    string trimmed = nativeRelativePath.trim();
+    if trimmed.startsWith("src/main/java/") {
+        trimmed = trimmed.substring("src/main/java/".length());
+    }
+    int? slashIdx = trimmed.lastIndexOf("/");
+    if slashIdx is int {
+        return normalizePathSeparators(trimmed.substring(0, slashIdx));
+    }
+    if trimmed.endsWith(".java") {
+        string stem = trimmed.substring(0, trimmed.length() - ".java".length());
+        int? packageDotIdx = stem.lastIndexOf(".");
+        if packageDotIdx is int {
+            return normalizePathSeparators(replaceLiteral(stem.substring(0, <int>packageDotIdx), ".", "/"));
+        }
+    }
+    int? dotIdx = trimmed.lastIndexOf(".");
+    if dotIdx is int && !trimmed.endsWith(".java") {
+        return normalizePathSeparators(replaceLiteral(trimmed.substring(0, dotIdx), ".", "/"));
+    }
+    return "";
+}
+
+function normalizePathSeparators(string path) returns string {
+    string normalized = replaceLiteral(path, "\\", "/");
+    while normalized.includes("//") {
+        normalized = replaceLiteral(normalized, "//", "/");
+    }
+    return normalized;
+}
+
+function replaceLiteral(string text, string searchFor, string replaceWith) returns string {
+    if searchFor.length() == 0 {
+        return text;
+    }
+    string result = "";
+    int cursor = 0;
+    int? idx = text.indexOf(searchFor);
+    while idx is int {
+        result += text.substring(cursor, <int>idx) + replaceWith;
+        cursor = <int>idx + searchFor.length();
+        idx = text.indexOf(searchFor, cursor);
+    }
+    return result + text.substring(cursor);
 }
 
 // Recursively descend into the single-child subdirectory chain until a leaf (no subdirs) is reached.
@@ -106,6 +156,11 @@ function extractJavaFileName(string nativeRelativePath) returns string {
     int? idx = trimmed.lastIndexOf("/");
     string baseName = idx is int ? trimmed.substring(<int>idx + 1) : trimmed;
     if baseName.endsWith(".java") {
+        string stem = baseName.substring(0, baseName.length() - ".java".length());
+        int? packageDotIdx = stem.lastIndexOf(".");
+        if packageDotIdx is int {
+            return string `${stem.substring(<int>packageDotIdx + 1)}.java`;
+        }
         return baseName;
     }
     return string `${baseName}.java`;

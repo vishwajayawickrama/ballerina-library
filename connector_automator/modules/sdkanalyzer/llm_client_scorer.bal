@@ -54,12 +54,23 @@ function callLLMForClientScoring(ClassInfo cls, ClassInfo[] allClasses, string? 
     string responseText = responseResult;
 
     string[] matches = regex:split(responseText, "\\|");
-    if matches.length() > 0 {
-        string scoreStr = matches[0];
-        if scoreStr.includes("SCORE:") {
-            string[] parts = regex:split(scoreStr, ":");
-            if parts.length() > 1 {
-                int|error parsedScore = int:fromString(parts[1].trim());
+    int? scoreIdx = responseText.indexOf("SCORE:");
+    if scoreIdx is int {
+        int cursor = <int>scoreIdx + "SCORE:".length();
+        while cursor < responseText.length() && responseText.substring(cursor, cursor + 1) == " " {
+            cursor += 1;
+        }
+        int scoreEnd = cursor;
+        while scoreEnd < responseText.length() {
+            string ch = responseText.substring(scoreEnd, scoreEnd + 1);
+            if ch >= "0" && ch <= "9" {
+                scoreEnd += 1;
+                continue;
+            }
+            break;
+        }
+        if scoreEnd > cursor {
+                int|error parsedScore = int:fromString(responseText.substring(cursor, scoreEnd));
                 if parsedScore is int {
                     decimal score = <decimal>parsedScore;
                     if score > 100.0d {
@@ -80,7 +91,6 @@ function callLLMForClientScoring(ClassInfo cls, ClassInfo[] allClasses, string? 
                         breakdown: string `LLM Analysis:\n${reason}`
                     };
                 }
-            }
         }
     }
 

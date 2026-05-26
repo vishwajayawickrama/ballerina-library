@@ -537,13 +537,23 @@ function deduplicateEnumMemberNames(IREnum[] enums) returns IREnum[] {
     IREnum[] result = [];
     foreach IREnum e in enums {
         string enumPrefix = deriveMemberName(e.name);
+        map<int> seenInEnum = {};
         IREnumValue[] newValues = [];
         foreach IREnumValue v in e.values {
             int count = memberCount[v.member] ?: 0;
+            string candidate = count > 1 ? enumPrefix + "_" + v.member : v.member;
+            string uniqueMember = candidate;
+            int suffix = seenInEnum[candidate] ?: 0;
+            while seenInEnum.hasKey(uniqueMember) {
+                suffix += 1;
+                uniqueMember = string `${candidate}_${suffix}`;
+            }
+            seenInEnum[candidate] = suffix;
+            seenInEnum[uniqueMember] = 0;
             if count > 1 {
-                newValues.push({member: enumPrefix + "_" + v.member, value: v.value});
+                newValues.push({member: uniqueMember, value: v.value});
             } else {
-                newValues.push(v);
+                newValues.push({member: uniqueMember, value: v.value});
             }
         }
         result.push({name: e.name, kind: "ENUM", nativeType: "string", values: newValues});

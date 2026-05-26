@@ -20,6 +20,7 @@ import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.StringReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.Files;
@@ -35,6 +36,7 @@ import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
+import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -42,6 +44,7 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 
 import io.ballerina.runtime.api.creators.ErrorCreator;
 import io.ballerina.runtime.api.creators.TypeCreator;
@@ -176,10 +179,17 @@ public class MavenResolver {
             String version = parts[2];
 
             Path cacheDir = Files.createTempDirectory("maven-cache-");
+            int maxDepth = getIntOption(options, "maxDepth", 4);
+            boolean offlineMode = getBooleanOption(options, "offlineMode", false);
+            boolean resolveDependencies = getBooleanOption(options, "resolveDependencies", true);
+            if (offlineMode) {
+                return ErrorCreator.createError(StringUtils.fromString(
+                        "Offline Maven resolution is not supported without an existing local cache"));
+            }
 
             List<String> allJars = downloadArtifactWithDependencies(
                 groupId, artifactId, version, DEFAULT_MAVEN_CENTRAL, cacheDir,
-                new HashSet<>(), 0);
+                new HashSet<>(), 0, maxDepth, resolveDependencies);
 
             if (allJars.isEmpty()) {
                 return ErrorCreator.createError(StringUtils.fromString(
@@ -209,15 +219,23 @@ public class MavenResolver {
     private static List<String> downloadArtifactWithDependencies(
             String groupId, String artifactId, String version, 
             String baseUrl, Path cacheDir, Set<String> visited, int depth) throws Exception {
+        return downloadArtifactWithDependencies(groupId, artifactId, version, baseUrl, cacheDir, visited, depth,
+                4, true);
+    }
+
+    private static List<String> downloadArtifactWithDependencies(
+            String groupId, String artifactId, String version,
+            String baseUrl, Path cacheDir, Set<String> visited, int depth, int maxDepth,
+            boolean resolveDependencies) throws Exception {
         
         List<String> jars = new ArrayList<>();
         String key = groupId + ":" + artifactId + ":" + version;
         
-        // Avoid cycles and limit depth (>4 = depth 5+ is cut off)
+        // Avoid cycles and limit depth.
         if (visited.contains(key)) {
             return jars;
         }
-        if (depth > 4) {
+        if (depth > maxDepth) {
             return jars;
         }
         visited.add(key);
@@ -228,7 +246,9 @@ public class MavenResolver {
         String jarUrl = String.format("%s/%s/%s/%s/%s",
                 baseUrl, groupPath, artifactId, version, jarFileName);
         
-        Path jarPath = cacheDir.resolve(jarFileName);
+        Path artifactDir = cacheDir.resolve(groupPath).resolve(artifactId).resolve(version);
+        Files.createDirectories(artifactDir);
+        Path jarPath = artifactDir.resolve(jarFileName);
         try {
             downloadFile(jarUrl, jarPath.toFile());
             jars.add(jarPath.toString());
@@ -238,7 +258,7 @@ public class MavenResolver {
             }
         }
         
-        if (depth < 5) {
+        if (resolveDependencies && depth < maxDepth) {
             List<Dependency> dependencies = new ArrayList<>();
 
             try {
@@ -246,7 +266,7 @@ public class MavenResolver {
                 String pomUrl = String.format("%s/%s/%s/%s/%s",
                         baseUrl, groupPath, artifactId, version, pomFileName);
 
-                Path pomPath = cacheDir.resolve(pomFileName);
+                Path pomPath = artifactDir.resolve(pomFileName);
                 downloadFile(pomUrl, pomPath.toFile());
 
                 List<Dependency> parsedDeps = parsePomFileDeps(pomPath.toFile());
@@ -273,7 +293,7 @@ public class MavenResolver {
                     if (!dep.optional && dep.version != null && !dep.version.startsWith("$")) {
                         List<String> depJars = downloadArtifactWithDependencies(
                                 dep.groupId, dep.artifactId, dep.version,
-                                baseUrl, cacheDir, visited, depth + 1);
+                                baseUrl, cacheDir, visited, depth + 1, maxDepth, true);
                         jars.addAll(depJars);
                     }
                 }
@@ -293,6 +313,29 @@ public class MavenResolver {
         String scope;
         boolean optional;
     }
+
+    private static int getIntOption(BMap<BString, Object> options, String key, int defaultValue) {
+        Object value = options.get(StringUtils.fromString(key));
+        if (value == null) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(value.toString());
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    private static boolean getBooleanOption(BMap<BString, Object> options, String key, boolean defaultValue) {
+        Object value = options.get(StringUtils.fromString(key));
+        if (value == null) {
+            return defaultValue;
+        }
+        if (value instanceof Boolean boolValue) {
+            return boolValue;
+        }
+        return Boolean.parseBoolean(value.toString());
+    }
     
     /**
      * Parse POM file and extract dependencies.
@@ -300,8 +343,7 @@ public class MavenResolver {
     private static List<Dependency> parsePomFileDeps(File pomFile) throws Exception {
         List<Dependency> dependencies = new ArrayList<>();
         
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        DocumentBuilder builder = factory.newDocumentBuilder();
+        DocumentBuilder builder = createSecureDocumentBuilder();
         Document doc = builder.parse(pomFile);
         doc.getDocumentElement().normalize();
         
@@ -410,7 +452,9 @@ public class MavenResolver {
 
             // Create temp directory
             Path tempDir = Files.createTempDirectory("sdk-analyzer-");
-            Path jarPath = tempDir.resolve(jarFileName);
+            Path jarDir = tempDir.resolve(groupPath).resolve(artifact).resolve(ver);
+            Files.createDirectories(jarDir);
+            Path jarPath = jarDir.resolve(jarFileName);
 
             // Download JAR
             downloadFile(downloadUrl, jarPath.toFile());
@@ -507,8 +551,7 @@ public class MavenResolver {
     private static List<BMap<BString, Object>> parsePomFile(File pomFile) throws Exception {
         List<BMap<BString, Object>> dependencies = new ArrayList<>();
 
-        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        DocumentBuilder builder = factory.newDocumentBuilder();
+        DocumentBuilder builder = createSecureDocumentBuilder();
         Document doc = builder.parse(pomFile);
         doc.getDocumentElement().normalize();
 
@@ -548,6 +591,20 @@ public class MavenResolver {
         }
 
         return dependencies;
+    }
+
+    private static DocumentBuilder createSecureDocumentBuilder() throws Exception {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        factory.setXIncludeAware(false);
+        factory.setExpandEntityReferences(false);
+
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        builder.setEntityResolver((publicId, systemId) -> new InputSource(new StringReader("")));
+        return builder;
     }
 
     /**

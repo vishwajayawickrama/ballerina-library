@@ -1023,8 +1023,46 @@ function removeJavaToolchainBlock(string content) returns string {
         return content;
     }
 
-    int startIndex = <int>javaIndex;
-    int endIndex = cursor;
+    string javaBlock = content.substring(<int>firstBrace + 1, cursor - 1);
+    int? toolchainIndexInBlock = javaBlock.indexOf("toolchain");
+    if toolchainIndexInBlock is () {
+        return content;
+    }
+    int toolchainIndex = <int>firstBrace + 1 + <int>toolchainIndexInBlock;
+    int? toolchainBrace = content.indexOf("{", toolchainIndex);
+    if toolchainBrace is () || <int>toolchainBrace >= cursor {
+        return content;
+    }
+
+    int toolchainDepth = 1;
+    int toolchainCursor = <int>toolchainBrace + 1;
+    while toolchainCursor < cursor && toolchainDepth > 0 {
+        string ch = content.substring(toolchainCursor, toolchainCursor + 1);
+        if ch == "{" {
+            toolchainDepth += 1;
+        } else if ch == "}" {
+            toolchainDepth -= 1;
+        }
+        toolchainCursor += 1;
+    }
+
+    if toolchainDepth != 0 {
+        return content;
+    }
+
+    int startIndex = toolchainIndex;
+    while startIndex > 0 {
+        string ch = content.substring(startIndex - 1, startIndex);
+        if ch == " " || ch == "\t" {
+            startIndex -= 1;
+            continue;
+        }
+        if ch == "\n" || ch == "\r" {
+            break;
+        }
+        break;
+    }
+    int endIndex = toolchainCursor;
     while endIndex < content.length() {
         string ch = content.substring(endIndex, endIndex + 1);
         if ch == "\n" || ch == "\r" || ch == " " || ch == "\t" {

@@ -945,7 +945,11 @@ function parseJavaEditOperations(string jsonText) returns JavaEditOperation[]|er
         string[] replacementLines = [];
         if replacementJson is json[] {
             foreach json lineJson in <json[]>replacementJson {
-                replacementLines.push(lineJson.toString());
+                string|error line = lineJson.cloneWithType(string);
+                if line is error {
+                    return error("replacement entries must be strings");
+                }
+                replacementLines.push(line);
             }
         } else {
             return error("replacement must be a JSON array of strings");
@@ -1571,7 +1575,10 @@ function resolveParentDirectory(string dirPath) returns string {
     if lastSlash is int && lastSlash > 0 {
         return normalized.substring(0, lastSlash);
     }
-    return dirPath;
+    if lastSlash is int && lastSlash == 0 {
+        return "/";
+    }
+    return ".";
 }
 
 function getBackupPath(string fullFilePath) returns string {
