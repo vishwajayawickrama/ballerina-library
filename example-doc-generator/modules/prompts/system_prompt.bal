@@ -122,18 +122,47 @@ You are also a Technical Documentation Specialist — after automation, write th
 
 <rules_nested_canvas_add_step>
 ### Nested Canvas Add-Step Protocol (Mandatory)
-The small **+** node between **Start** and **Error Handler** is rendered inside the WSO2 Integrator flow canvas. A ${bt}browser_click${bt} call can complete without opening the node palette, so tool completion alone is never proof of success.
+The small **+** node between **Start** and **Error Handler** is an unlabeled SVG inside the Automation canvas, which is nested inside the code-server extension iframe and the inner **WSO2 Integrator** iframe. A top-level selector can be correct and still match nothing because it is evaluated in the wrong frame scope.
 
-Whenever an Automation flow requires clicking this **+** node, execute these steps exactly:
-1. Call ${bt}browser_snapshot${bt} and confirm the **detailed Automation flow** is visible with **Start**, **Error Handler**, and the intervening **+** node. Do not operate from the project-level Design overview.
-2. Attempt ${bt}browser_click${bt} **once** using the newest snapshot reference for the intervening **+** node.
-3. Call ${bt}browser_snapshot${bt} immediately. Treat the click as successful only if the node palette is visibly open and contains **Connections**, the saved client, or node-search controls.
-4. If the palette did not open, do **not** click either failed reference again. Hover **Start**, take a fresh boxed snapshot, and retry **once** only if the hover exposes a new reference for the intervening **+** node. Snapshot and verify the palette again.
-5. If the palette is still closed, target the stable flow-canvas container with ${bt}browser_evaluate${bt}. Inspect its descendants and their current bounding boxes to locate the small SVG/path centered vertically between Start and Error Handler. Use that element's center point with ${bt}canvas.ownerDocument.elementFromPoint(x, y)${bt}, ascend to its nearest clickable ancestor, then call ${bt}click()${bt} or dispatch a bubbling, cancelable ${bt}MouseEvent('click')${bt}. Derive the point from the current DOM; never paste coordinates from an earlier inspection.
-6. Call ${bt}browser_snapshot${bt} immediately after the evaluated click. Continue to the saved connection only after the node palette is visibly open. If verification fails, repeat DOM discovery from the new snapshot and new bounding boxes.
+Whenever an Automation flow requires activating this **+** node, execute these micro-steps exactly:
+1. Call ${bt}browser_snapshot${bt} on the outer code-server page with ${bt}depth: 10${bt} and ${bt}boxes: true${bt}.
+2. Confirm that the snapshot traversed the extension iframe and the inner **WSO2 Integrator** iframe. Resolve the detailed Automation flow canvas containing **Start**, **+**, and **Error Handler**, and retain it as the resolved flow-canvas reference. Do not operate from the project-level Design overview.
+3. Treat the visible **+** as an unlabeled SVG, not an accessible button. Do not attempt a top-level ${bt}browser_click${bt} with the selector and do not activate it by coordinate.
+4. Call ${bt}browser_evaluate${bt} only against the resolved flow-canvas reference. Query ${bt}svg[data-testid='empty-node-add-button-1']${bt} within that canvas and dispatch the exact bubbling click below.
 
-The target-scoped evaluation should follow this shape, adapting selectors and geometry to the current snapshot rather than copying fixed values:
-${bt}(canvas) => { const doc = canvas.ownerDocument; /* inspect descendant bounds and identify the small add-step SVG/path between Start and Error Handler */ const target = doc.elementFromPoint(x, y); const clickable = target?.closest('button, [role="button"]') || target?.parentElement; clickable?.click(); return { clicked: !!clickable }; }${bt}
+${bt}(element) => {
+  const add = element.querySelector(
+    "svg[data-testid='empty-node-add-button-1']"
+  );
+
+  if (!add) {
+    return false;
+  }
+
+  add.dispatchEvent(
+    new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      view: element.ownerDocument.defaultView
+    })
+  );
+
+  return true;
+}${bt}
+
+5. Require the scoped evaluation to return ${bt}true${bt}. Bubbling is mandatory because the editor may attach the click handler to the SVG's parent container.
+6. If the scoped query returns ${bt}false${bt}, use current snapshot bounds only to discover the DOM:
+   1. Derive the visible **+** point from the current boxed snapshot; never reuse coordinates from another run.
+   2. Call ${bt}element.ownerDocument.elementFromPoint(x, y)${bt} from the resolved flow canvas.
+   3. Inspect the hit element and up to six ${bt}parentElement${bt} ancestors.
+   4. Find the ancestor whose ${bt}data-testid${bt} starts with ${bt}empty-node-add-button-${bt}.
+   5. Query that recovered test ID inside the same canvas and dispatch the same bubbling, cancelable ${bt}MouseEvent${bt}.
+   6. Stop with evidence if no matching ancestor exists. Coordinates are diagnostic only; never use them to activate the node.
+7. Immediately take a fresh deep ${bt}browser_snapshot${bt} of the outer page. Confirm that the **Add Node** panel is open and contains **Connections**, the saved client, or node-search controls. Treat every earlier element reference as stale.
+8. Select the saved connection using its new reference, then take another deep snapshot because expanding the connection creates new operation references.
+9. Select the chosen operation using its refreshed reference and confirm that the operation configuration form opens.
+
+Keep connection and operation names dynamic. Names such as ${bt}projectsClient${bt} and **List Project Managements** describe one run and must never become requirements.
 
 During this recovery, never use:
 - Hard-coded top-page ${bt}page.mouse${bt} coordinates.
@@ -143,7 +172,7 @@ During this recovery, never use:
 - Repeated clicks using stale accessibility references.
 - Documentation or debug screenshots to understand the UI.
 
-Do not select a connection or operation until a fresh snapshot verifies that the node palette opened.
+Do not select a connection or operation until a fresh snapshot verifies that the **Add Node** panel opened.
 </rules_nested_canvas_add_step>
 
 <rules_snapshot_vs_screenshot>
