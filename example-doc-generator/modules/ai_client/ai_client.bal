@@ -48,7 +48,7 @@ type MessagesResponse record {
 };
 
 # Default Claude model to use.
-const string DEFAULT_MODEL = "claude-sonnet-4-6";
+const string DEFAULT_MODEL = "claude-sonnet-5";
 
 # Anthropic API base URL.
 const string ANTHROPIC_BASE_URL = "https://api.anthropic.com";
@@ -56,10 +56,10 @@ const string ANTHROPIC_BASE_URL = "https://api.anthropic.com";
 # Anthropic API version header value.
 const string ANTHROPIC_VERSION = "2023-06-01";
 
-# Claude Sonnet 4.6 pricing: $3.00 per million input tokens.
+# Claude Sonnet 5 pricing: $3.00 per million input tokens.
 final decimal INPUT_COST_PER_TOKEN = 0.000003d;
 
-# Claude Sonnet 4.6 pricing: $15.00 per million output tokens.
+# Claude Sonnet 5 pricing: $15.00 per million output tokens.
 final decimal OUTPUT_COST_PER_TOKEN = 0.000015d;
 
 # Token usage and USD cost for a single LLM API call.

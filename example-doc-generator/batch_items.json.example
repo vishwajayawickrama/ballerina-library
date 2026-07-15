@@ -16,5 +16,15 @@
       "name": "trigger.twilio",
       "instructions": "Use the onReceived handler."
     }
+
+    { "type": "connector", "name": "sap.businessone.sales" }, Not in integrator
+    { "type": "connector", "name": "sap.businessone.purchasing" }, done
+    { "type": "connector", "name": "sap.businessone.banking" }, Done
+    { "type": "connector", "name": "sap.businessone.inventory" }, Done
+    { "type": "connector", "name": "sap.businessone.production" }, Done
+    { "type": "connector", "name": "sap.businessone.projects" },
+    { "type": "connector", "name": "sap.businessone.service" },
+    { "type": "connector", "name": "sap.businessone.humanresources" },
+    { "type": "connector", "name": "sap.businessone.localization" } Not in the integrator.
   ]
 }
